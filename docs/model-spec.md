@@ -1,6 +1,6 @@
 # Draft model specification
 
-**Status:** Working proposal for the two team members and facilitator to review. Parameters below are pilot choices, not calibrated real-world values.
+**Status:** Core baseline and mixed-traffic model rules implemented and verified for Checkpoint 2. Parameters below are pilot choices, not calibrated real-world values.
 
 ## Research question
 
@@ -21,7 +21,7 @@ We will test whether adding AVs changes mean speed and traffic stability, whethe
 1. Accelerate: `v_i = min(v_i + 1, v_max)`.
 2. Keep a collision-free gap: `v_i = min(v_i, g_i)`.
 3. For a human driver, reduce speed by one with probability `p_h`, stopping at zero.
-4. For the initial AV rule, use the same acceleration and gap rule without random slowing (`p_av = 0`). This is a *modelled behavioural contrast*, not proof that real AVs drive this way. The team should approve or revise this rule before treating results as final.
+4. For the implemented AV rule, vehicles use the same acceleration and gap rules but completely bypass the random slowing rule ($p_{av} = 0.0$). This provides a controlled behavioural contrast rather than a claim about actual automated driving dynamics. The model does not currently represent sensing uncertainty or reaction delays.
 5. Move: `x_i = (x_i + v_i) mod L`.
 
 The first implementation should support human-only traffic. AV behaviour is a separate contribution after the baseline is checked. Explicit reaction delay, AV communication and lane changes are outside the initial scope.
@@ -30,7 +30,7 @@ The first implementation should support human-only traffic. AV behaviour is a se
 
 - Initial road length: `L = 200` cells; initial maximum speed: `v_max = 5` cells per step.
 - Pilot densities: `N = 20, 40, 60` vehicles (density `0.10, 0.20, 0.30`). These may change if pilots do not produce informative conditions.
-- AV shares: `0%, 10%, 25%, 50%, 75%, 100%`. For a fixed `N`, round the AV count to the nearest integer and record the realised share.
+- AV shares: `0%, 10%, 25%, 50%, 75%, 100%`. For a fixed `N`, the AV count is rounded to the nearest integer (`round(N * av_share)`), shuffled randomly across initial vehicle positions, and both the requested and actual realized shares are locked into the output logs to ensure strict execution tracking.
 - Hold road length, maximum speed, human slowing probability, simulation length and initialization method constant within a comparison.
 - Run multiple independent seeds per condition. Use a small pilot first, then choose enough repeats to show variation in final results.
 - Proposed analysis window: discard an initial settling period, then measure over the remaining steps. Specify the final step counts before running reported experiments.
@@ -62,3 +62,11 @@ Report means and variation across runs. Record each run's parameters and seed so
 4. Ask the facilitator whether this focused single-lane model provides enough scope when supported by systematic experiments and a sensitivity study.
 
 Any conclusion must be framed as conditional on these rules and parameters. We should discuss how the chosen AV rule itself influences the result, and test a plausible alternative or sensitivity if time allows.
+
+### Evening Shift Updates (Issue #4 Implementation)
+
+- **AV Rule Choice:** Implemented the proposed baseline where AVs use the same acceleration and gap rules but completely bypass random slowing (\(p_{av} = 0.0\)). This provides a clean empirical contrast to isolate human stochastic delays.
+- **Initial Placement & Typing:** Vehicles are typed by calculating `round(N * av_share)`, shuffling the type assignments, and matching them to unique sorted positions on the ring. 
+- **Physics Engine Fix:** Discovered a baseline array re-sorting bug in `step()`. Vehicles are now sorted by position *only once* during initialization to lock the spatial ring topology. This guarantees cars cannot illegally pass or phase through each other on the single-lane road.
+- **Metrics Tracking:** Both `requested_av_share` and `realised_av_share` are now permanently saved to the final summary dictionaries and tracked inside every single row of the generated step-by-step CSV outputs.
+
