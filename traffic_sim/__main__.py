@@ -1,4 +1,4 @@
-"""Run the human-only traffic baseline from the command line."""
+"""Run the mixed-traffic model from the command line."""
 
 import argparse
 import csv
@@ -9,7 +9,7 @@ from .model import SimulationConfig, run_simulation
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the human-only circular traffic model")
+    parser = argparse.ArgumentParser(description="Run the mixed circular traffic model")
     parser.add_argument("--road-length", type=int, default=200)
     parser.add_argument("--vehicles", type=int, default=40)
     parser.add_argument("--max-speed", type=int, default=5)
@@ -18,6 +18,7 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=200)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--csv", type=Path, help="Write per-step metrics to this CSV file")
+    parser.add_argument("--av-share", type=float, default=0.0, help="Fraction of autonomous vehicles (0 to 1)")
     args = parser.parse_args()
 
     config = SimulationConfig(
@@ -25,12 +26,16 @@ def main() -> None:
         num_vehicles=args.vehicles,
         max_speed=args.max_speed,
         human_slow_probability=args.human_slow_prob,
+        av_share=args.av_share,
         seed=args.seed,
     )
+    
     result = run_simulation(config, steps=args.steps, warmup=args.warmup)
+    
     if args.csv is not None:
         args.csv.parent.mkdir(parents=True, exist_ok=True)
         with args.csv.open("w", newline="", encoding="utf-8") as stream:
+            # Fieldnames automatically pick up requested_av_share and realised_av_share per row
             writer = csv.DictWriter(stream, fieldnames=result["per_step"][0].keys())
             writer.writeheader()
             writer.writerows(result["per_step"])
