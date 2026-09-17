@@ -18,9 +18,20 @@ This question and the model rules are working proposals for discussion with the 
 
 See [draft model specification](docs/model-spec.md) for assumptions, proposed measurements and decisions still to make.
 
+## Run the human-only baseline
+
+Python 3 with the standard library is sufficient. From the repository root:
+
+```powershell
+python -m traffic_sim --road-length 200 --vehicles 40 --max-speed 5 --human-slow-prob 0.2 --warmup 200 --steps 800 --seed 7 --csv outputs/baseline-seed7.csv
+python -m unittest discover -s tests -v
+```
+
+The command prints the run configuration and summary metrics as JSON. With `--csv`, it also writes one row of measurements per post-warm-up step. `outputs/` is ignored by Git; results used in the report should be regenerated from recorded commands and seeds. The implementation currently supports human-driven vehicles only. The AV rule is the evening member's separate task.
+
 ## Two-person workflow
 
-We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, and designs the experiment runner. Work then passes back for checks, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
+We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, then suggests the next morning task based on pilot results. Work passes back for experiments, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
 
 At each handoff, leave a GitHub issue or PR update with what changed, the commands run, any open question, and the next task. Record modelling decisions in docs/model-spec.md so they do not depend on chat history.
 
