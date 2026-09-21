@@ -2,11 +2,11 @@
 
 CITS4403 group research project investigating how the share of autonomous vehicles affects stop-and-go traffic on a single-lane circular road. The project is completed by two students. The model, experiments, report and demonstration should answer the same research question and be reproducible from the submitted code.
 
-## Draft research question
+## Research question
 
 How does autonomous vehicle proportion affect traffic stability at different traffic densities in a simplified mixed-traffic model?
 
-This question and the model rules are working proposals for discussion with the teammate and facilitator. The model does not claim to predict real-road AV performance.
+The model is designed to investigate this question under explicit simplified rules. It does not claim to predict real-road AV performance.
 
 ## Initial scope
 
@@ -18,16 +18,26 @@ This question and the model rules are working proposals for discussion with the 
 
 See [draft model specification](docs/model-spec.md) for assumptions, proposed measurements and decisions still to make.
 
-## Run the human-only baseline
+## Run the model
 
 Python 3 with the standard library is sufficient. From the repository root:
 
 ```powershell
-python -m traffic_sim --road-length 200 --vehicles 40 --max-speed 5 --human-slow-prob 0.2 --warmup 200 --steps 800 --seed 7 --csv outputs/baseline-seed7.csv
+python -m traffic_sim --road-length 200 --vehicles 40 --max-speed 5 --human-slow-prob 0.2 --av-share 0.5 --warmup 200 --steps 800 --seed 7 --csv outputs/mixed-seed7.csv
 python -m unittest discover -s tests -v
 ```
 
-The command prints the run configuration and summary metrics as JSON. With `--csv`, it also writes one row of measurements per post-warm-up step. `outputs/` is ignored by Git; results used in the report should be regenerated from recorded commands and seeds. The implementation currently supports human-driven vehicles only. The AV rule is the evening member's separate task.
+`--av-share` accepts a value from `0` (all human) to `1` (all AV). Human drivers may slow randomly; AVs follow the same acceleration and collision-free gap rules without random slowing. The command prints the configuration and summary metrics as JSON. With `--csv`, it also writes one row per post-warm-up step. `outputs/` is ignored by Git, so reported results should always include their parameters and seeds.
+
+## Reproduce the Checkpoint 2 pilot
+
+The pilot compares 0%, 50% and 100% AV traffic at densities 0.10, 0.20 and 0.30 using seed 7:
+
+```powershell
+python -m experiments.checkpoint2_pilot
+```
+
+This regenerates `results/checkpoint2-pilot.csv` and prints a compact table. The pilot is an initial demonstration, not the final experiment: the final analysis will use additional AV shares and repeated seeds. See [Checkpoint 2 notes](docs/checkpoint-2.md) for the model explanation, preliminary observations, limitations and next experiment.
 
 ## Two-person workflow
 
