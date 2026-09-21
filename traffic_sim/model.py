@@ -17,6 +17,7 @@ class SimulationConfig:
     num_vehicles: int = 40
     max_speed: int = 5
     human_slow_probability: float = 0.2
+    av_share: float = 0.0
     seed: int = 1
 
     def __post_init__(self) -> None:
@@ -28,6 +29,8 @@ class SimulationConfig:
             raise ValueError("max_speed must be non-negative")
         if not 0 <= self.human_slow_probability <= 1:
             raise ValueError("human_slow_probability must be between 0 and 1")
+        if not 0 <= self.av_share <= 1:
+            raise ValueError("av_share must be between 0 and 1")
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,7 @@ class Vehicle:
     vehicle_id: int
     position: int
     speed: int
+    vehicle_type: str = "human"
 
 
 class TrafficModel:
@@ -43,8 +47,20 @@ class TrafficModel:
     def __init__(self, config: SimulationConfig):
         self.config = config
         self.rng = Random(config.seed)
+        
+        # Sort positions ONCE to establish a fixed spatial ring order
         positions = sorted(self.rng.sample(range(config.road_length), config.num_vehicles))
-        self.vehicles = [Vehicle(i, position, 0) for i, position in enumerate(positions)]
+        
+        # Generate vehicle type distributions
+        num_av = round(config.num_vehicles * config.av_share)
+        vehicle_types = ["av"] * num_av + ["human"] * (config.num_vehicles - num_av)
+        self.rng.shuffle(vehicle_types)
+        
+        # Instantiate vehicles in spatial sequence
+        self.vehicles = [
+            Vehicle(i, position, 0, vehicle_types[i]) 
+            for i, position in enumerate(positions)
+        ]
         self._check_state()
 
     def _check_state(self) -> None:
@@ -61,26 +77,42 @@ class TrafficModel:
 
     def step(self) -> tuple[Vehicle, ...]:
         """Apply acceleration, safe braking, random slowing, then movement."""
-
-        ordered = sorted(self.vehicles, key=lambda vehicle: vehicle.position)
+        # CRITICAL FIX: Do NOT sort by position here. 
+        # Using the natural array index guarantees cars maintain spatial order.
         updated = []
-        for index, vehicle in enumerate(ordered):
-            ahead = ordered[(index + 1) % len(ordered)]
+        num_cars = len(self.vehicles)
+        
+        for index, vehicle in enumerate(self.vehicles):
+            ahead = self.vehicles[(index + 1) % num_cars]
             gap = (ahead.position - vehicle.position - 1) % self.config.road_length
+            
+            # Base velocity calculation
             speed = min(vehicle.speed + 1, self.config.max_speed, gap)
-            if speed > 0 and self.rng.random() < self.config.human_slow_probability:
+            
+            # Apply random slowing ONLY to human drivers
+            if (
+                vehicle.vehicle_type == "human"
+                and speed > 0 
+                and self.rng.random() < self.config.human_slow_probability
+            ):
                 speed -= 1
+                
             updated.append(
                 Vehicle(
                     vehicle.vehicle_id,
                     (vehicle.position + speed) % self.config.road_length,
                     speed,
+                    vehicle.vehicle_type
                 )
             )
-        self.vehicles = sorted(updated, key=lambda vehicle: vehicle.vehicle_id)
+            
+        self.vehicles = updated
         self._check_state()
         return tuple(self.vehicles)
 
+    def av_share(self) -> float:
+        return sum(v.vehicle_type == "av" for v in self.vehicles) / len(self.vehicles)
+    
 
 def run_simulation(
     config: SimulationConfig, *, steps: int = 800, warmup: int = 200
@@ -89,7 +121,10 @@ def run_simulation(
 
     if steps < 1 or warmup < 0:
         raise ValueError("steps must be positive and warmup must be non-negative")
+        
     model = TrafficModel(config)
+    realised = model.av_share()  # Capture baseline allocation instantly
+    
     for _ in range(warmup):
         model.step()
 
@@ -105,6 +140,8 @@ def run_simulation(
                 "mean_speed": fmean(speeds),
                 "stopped_fraction": speeds.count(0) / len(speeds),
                 "speed_std": pstdev(speeds),
+                "requested_av_share": config.av_share,
+                "realised_av_share": realised
             }
         )
 
@@ -112,6 +149,8 @@ def run_simulation(
         "config": asdict(config),
         "warmup": warmup,
         "steps": steps,
+        "requested_av_share": config.av_share,
+        "realised_av_share": realised,
         "summary": {
             "mean_speed": fmean(all_speeds),
             "stopped_fraction": all_speeds.count(0) / len(all_speeds),

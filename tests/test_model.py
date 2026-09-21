@@ -9,12 +9,14 @@ class TrafficModelTests(unittest.TestCase):
             road_length=10, num_vehicles=2, max_speed=5, human_slow_probability=0
         )
         model = TrafficModel(config)
-        model.vehicles = [Vehicle(0, 9, 1), Vehicle(1, 2, 0)]
+        # Explicitly set vehicle_type to match our updated dataclass signature
+        model.vehicles = [Vehicle(0, 9, 1, "human"), Vehicle(1, 2, 0, "human")]
 
         vehicles = model.step()
 
-        self.assertEqual(vehicles[0], Vehicle(0, 1, 2))
-        self.assertEqual(vehicles[1], Vehicle(1, 3, 1))
+        # Update assertions to include the vehicle_type field
+        self.assertEqual(vehicles[0], Vehicle(0, 1, 2, "human"))
+        self.assertEqual(vehicles[1], Vehicle(1, 3, 1, "human"))
 
     def test_random_slowing_extreme_prevents_single_car_from_starting(self):
         config = SimulationConfig(
@@ -46,6 +48,40 @@ class TrafficModelTests(unittest.TestCase):
             SimulationConfig(road_length=10, num_vehicles=11)
         with self.assertRaises(ValueError):
             SimulationConfig(human_slow_probability=1.1)
+
+    def test_zero_av_share_is_human_only(self):
+        config = SimulationConfig(road_length=20, num_vehicles=10, av_share=0.0)
+        model = TrafficModel(config)
+        self.assertTrue(all(v.vehicle_type == "human" for v in model.vehicles))
+
+    def test_mixed_traffic_contains_human_and_av_vehicles(self):
+        config = SimulationConfig(road_length=20, num_vehicles=10, av_share=0.5, seed=42)
+        model = TrafficModel(config)
+        types = {v.vehicle_type for v in model.vehicles}
+        self.assertEqual(types, {"human", "av"})
+
+    def test_all_autonomous_configuration(self):
+        config = SimulationConfig(road_length=20, num_vehicles=10, av_share=1.0)
+        model = TrafficModel(config)
+        self.assertTrue(all(v.vehicle_type == "av" for v in model.vehicles))
+
+    def test_invalid_share_bounds_rejected(self):
+        with self.assertRaises(ValueError):
+            SimulationConfig(av_share=-0.1)
+        with self.assertRaises(ValueError):
+            SimulationConfig(av_share=1.1)
+
+    def test_vehicles_cannot_overtake_or_swap_order(self):
+        """Regression test for tracking order bug."""
+        config = SimulationConfig(road_length=20, num_vehicles=2, max_speed=5, human_slow_probability=0)
+        model = TrafficModel(config)
+        model.vehicles = [Vehicle(0, 5, 4, "human"), Vehicle(1, 7, 0, "human")]
+        
+        for _ in range(5):
+            model.step()
+            car_0 = next(v for v in model.vehicles if v.vehicle_id == 0)
+            car_1 = next(v for v in model.vehicles if v.vehicle_id == 1)
+            self.assertTrue(car_0.position < car_1.position or car_0.position > 15)
 
 
 if __name__ == "__main__":
