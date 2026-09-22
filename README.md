@@ -39,6 +39,22 @@ python -m experiments.checkpoint2_pilot
 
 This regenerates `results/checkpoint2-pilot.csv` and prints a compact table. The pilot is an initial demonstration, not the final experiment: the final analysis will use additional AV shares and repeated seeds. See [Checkpoint 2 notes](docs/checkpoint-2.md) for the model explanation, preliminary observations, limitations and next experiment.
 
+## Run the repeated-seed experiment
+
+The final experiment expands the comparison to 0%, 10%, 25%, 50%, 75% and 100% AV traffic at each pilot density. By default it runs seeds 1 through 20 and writes both individual-run results and summaries across seeds:
+
+```powershell
+python -m experiments.final_experiment
+```
+
+Use `--seeds` to select another reproducible set, including inclusive ranges:
+
+```powershell
+python -m experiments.final_experiment --seeds 1-30
+```
+
+`results/final-runs.csv` contains one row per independent simulation. `results/final-summary.csv` reports the mean and sample standard deviation across seeds for each density and AV share. The across-seed variation is distinct from `speed_std`, which measures variation among vehicle-speed observations within one simulation.
+
 ## Two-person workflow
 
 We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, then suggests the next morning task based on pilot results. Work passes back for experiments, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
