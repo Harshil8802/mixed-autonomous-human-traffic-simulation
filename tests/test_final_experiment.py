@@ -1,5 +1,7 @@
 import argparse
 import unittest
+from pathlib import Path
+from experiments.slowdown_sensitivity import run_sensitivity_experiment
 
 from experiments.final_experiment import (
     aggregate_runs,
@@ -60,6 +62,22 @@ class FinalExperimentTests(unittest.TestCase):
         self.assertAlmostEqual(summary["mean_speed_seed_sd"], 2 ** 0.5)
         self.assertAlmostEqual(summary["stopped_fraction_mean"], 0.15)
 
+import unittest
+from pathlib import Path
+from experiments.slowdown_sensitivity import run_sensitivity_experiment
+
+class TestSlowdownSensitivity(unittest.TestCase):
+    def setUp(self) -> None:
+        self.test_output = Path("results/test-slowdown-sensitivity.csv")
+
+    def tearDown(self) -> None:
+        if self.test_output.exists():
+            self.test_output.unlink()
+
+    def test_experiment_matrix_generates_all_fifteen_conditions(self) -> None:
+        summary_rows = run_sensitivity_experiment(self.test_output)
+        self.assertEqual(len(summary_rows), 15)
+        self.assertTrue(self.test_output.exists())
 
 if __name__ == "__main__":
     unittest.main()

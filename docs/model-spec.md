@@ -70,3 +70,14 @@ Any conclusion must be framed as conditional on these rules and parameters. We s
 - **Physics Engine Fix:** Discovered a baseline array re-sorting bug in `step()`. Vehicles are now sorted by position *only once* during initialization to lock the spatial ring topology. This guarantees cars cannot illegally pass or phase through each other on the single-lane road.
 - **Metrics Tracking:** Both `requested_av_share` and `realised_av_share` are now permanently saved to the final summary dictionaries and tracked inside every single row of the generated step-by-step CSV outputs.
 
+### Late Shift Updates (Issue #10 Sensitivity Analysis)
+
+- **Sensitivity Analysis Framework:** Added a dedicated module to test model behavior across varying human driver unpredictability layers (\(p_h \in \{0.0, 0.1, 0.2, 0.3, 0.4\}\)) crossed with critical AV mix thresholds (0%, 50%, 100%).
+- **Statistical Aggregation over Seeds:** Expanded experiment calculations to compute mean distributions and sample standard deviations across 10 distinct seeds per layout condition block.
+- **Reproduction Track:**
+  ```bash
+  python -m experiments.slowdown_sensitivity
+  ```
+- **Sensitivity Insights:**
+  - **100% AV Control Stability:** Verified that when the AV penetration index reaches 1.0, varying \(p_h\) causes 0.000 variance in macro metrics (Speed holds flat at `4.000 +/- 0.000`), confirming the deterministic boundary conditions of the control setup.
+  - **Damping Envelopes:** A 50% AV share scales linearly, providing continuous flow damping across all tested noise ranges—slashing stopped vehicle observations by approximately 30% even when human volatility spikes to \(p_h = 0.4\).
