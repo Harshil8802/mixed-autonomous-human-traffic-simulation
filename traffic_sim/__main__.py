@@ -5,7 +5,7 @@ import csv
 import json
 from pathlib import Path
 
-from .model import SimulationConfig, run_simulation
+from .model import BrakingDisturbance, SimulationConfig, run_simulation
 
 
 def main() -> None:
@@ -19,6 +19,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--csv", type=Path, help="Write per-step metrics to this CSV file")
     parser.add_argument("--av-share", type=float, default=0.0, help="Fraction of autonomous vehicles (0 to 1)")
+    parser.add_argument(
+        "--disturbance-start-step",
+        type=int,
+        help="Measurement step at which a controlled braking event begins",
+    )
+    parser.add_argument("--disturbance-duration", type=int, default=8)
+    parser.add_argument("--disturbance-vehicle-id", type=int, default=0)
+    parser.add_argument("--disturbance-speed-cap", type=int, default=0)
     args = parser.parse_args()
 
     config = SimulationConfig(
@@ -30,7 +38,22 @@ def main() -> None:
         seed=args.seed,
     )
     
-    result = run_simulation(config, steps=args.steps, warmup=args.warmup)
+    disturbance = (
+        BrakingDisturbance(
+            vehicle_id=args.disturbance_vehicle_id,
+            start_step=args.disturbance_start_step,
+            duration=args.disturbance_duration,
+            speed_cap=args.disturbance_speed_cap,
+        )
+        if args.disturbance_start_step is not None
+        else None
+    )
+    result = run_simulation(
+        config,
+        steps=args.steps,
+        warmup=args.warmup,
+        disturbance=disturbance,
+    )
     
     if args.csv is not None:
         args.csv.parent.mkdir(parents=True, exist_ok=True)
