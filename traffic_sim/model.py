@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from random import Random
 from statistics import fmean, pstdev
+from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,35 @@ class SimulationConfig:
             raise ValueError("human_slow_probability must be between 0 and 1")
         if not 0 <= self.av_share <= 1:
             raise ValueError("av_share must be between 0 and 1")
+
+
+@dataclass(frozen=True)
+class BrakingDisturbance:
+    """Temporarily cap one vehicle's speed during the measurement period."""
+
+    vehicle_id: int = 0
+    start_step: int = 100
+    duration: int = 8
+    speed_cap: int = 0
+
+    def __post_init__(self) -> None:
+        if self.vehicle_id < 0:
+            raise ValueError("vehicle_id must be non-negative")
+        if self.start_step < 1:
+            raise ValueError("start_step must be at least 1")
+        if self.duration < 1:
+            raise ValueError("duration must be at least 1")
+        if self.speed_cap < 0:
+            raise ValueError("speed_cap must be non-negative")
+
+    @property
+    def end_step(self) -> int:
+        """Last measurement step on which the speed cap is active."""
+
+        return self.start_step + self.duration - 1
+
+    def is_active(self, measurement_step: int) -> bool:
+        return self.start_step <= measurement_step <= self.end_step
 
 
 @dataclass(frozen=True)
@@ -75,8 +105,17 @@ class TrafficModel:
             if not 0 <= vehicle.speed <= self.config.max_speed:
                 raise AssertionError("speed outside the permitted range")
 
-    def step(self) -> tuple[Vehicle, ...]:
+    def step(
+        self, speed_caps: Mapping[int, int] | None = None
+    ) -> tuple[Vehicle, ...]:
         """Apply acceleration, safe braking, random slowing, then movement."""
+        speed_caps = speed_caps or {}
+        valid_ids = {vehicle.vehicle_id for vehicle in self.vehicles}
+        if not set(speed_caps).issubset(valid_ids):
+            raise ValueError("speed cap refers to an unknown vehicle")
+        if any(cap < 0 or cap > self.config.max_speed for cap in speed_caps.values()):
+            raise ValueError("speed caps must be between 0 and max_speed")
+
         # CRITICAL FIX: Do NOT sort by position here. 
         # Using the natural array index guarantees cars maintain spatial order.
         updated = []
@@ -96,6 +135,9 @@ class TrafficModel:
                 and self.rng.random() < self.config.human_slow_probability
             ):
                 speed -= 1
+
+            if vehicle.vehicle_id in speed_caps:
+                speed = min(speed, speed_caps[vehicle.vehicle_id])
                 
             updated.append(
                 Vehicle(
@@ -115,12 +157,23 @@ class TrafficModel:
     
 
 def run_simulation(
-    config: SimulationConfig, *, steps: int = 800, warmup: int = 200
+    config: SimulationConfig,
+    *,
+    steps: int = 800,
+    warmup: int = 200,
+    disturbance: BrakingDisturbance | None = None,
 ) -> dict:
     """Return per-step metrics and a summary after the warm-up period."""
 
     if steps < 1 or warmup < 0:
         raise ValueError("steps must be positive and warmup must be non-negative")
+    if disturbance is not None:
+        if disturbance.vehicle_id >= config.num_vehicles:
+            raise ValueError("disturbance vehicle_id must identify an existing vehicle")
+        if disturbance.speed_cap > config.max_speed:
+            raise ValueError("disturbance speed_cap cannot exceed max_speed")
+        if disturbance.end_step > steps:
+            raise ValueError("disturbance must finish within the measurement period")
         
     model = TrafficModel(config)
     realised = model.av_share()  # Capture baseline allocation instantly
@@ -131,9 +184,26 @@ def run_simulation(
     rows = []
     all_speeds = []
     for measurement_step in range(1, steps + 1):
-        vehicles = model.step()
+        disturbance_active = (
+            disturbance is not None and disturbance.is_active(measurement_step)
+        )
+        speed_caps = (
+            {disturbance.vehicle_id: disturbance.speed_cap}
+            if disturbance_active and disturbance is not None
+            else None
+        )
+        vehicles = model.step(speed_caps=speed_caps)
         speeds = [vehicle.speed for vehicle in vehicles]
         all_speeds.extend(speeds)
+        disturbed_vehicle_speed = (
+            next(
+                vehicle.speed
+                for vehicle in vehicles
+                if vehicle.vehicle_id == disturbance.vehicle_id
+            )
+            if disturbance is not None
+            else None
+        )
         rows.append(
             {
                 "step": measurement_step,
@@ -141,7 +211,9 @@ def run_simulation(
                 "stopped_fraction": speeds.count(0) / len(speeds),
                 "speed_std": pstdev(speeds),
                 "requested_av_share": config.av_share,
-                "realised_av_share": realised
+                "realised_av_share": realised,
+                "disturbance_active": disturbance_active,
+                "disturbed_vehicle_speed": disturbed_vehicle_speed,
             }
         )
 
@@ -149,6 +221,7 @@ def run_simulation(
         "config": asdict(config),
         "warmup": warmup,
         "steps": steps,
+        "disturbance": asdict(disturbance) if disturbance is not None else None,
         "requested_av_share": config.av_share,
         "realised_av_share": realised,
         "summary": {

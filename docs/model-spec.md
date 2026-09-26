@@ -63,6 +63,47 @@ Report means and variation across runs. Record each run's parameters and seed so
 
 Any conclusion must be framed as conditional on these rules and parameters. We should discuss how the chosen AV rule itself influences the result, and test a plausible alternative or sensitivity if time allows.
 
+## Controlled braking and recovery extension
+
+To study transient stop-and-go waves as well as steady-state averages, the model
+supports an optional controlled braking event during the measurement period. A
+specified vehicle receives a temporary speed cap after the ordinary acceleration,
+gap and random-slowing rules have been applied. Because the cap can only reduce
+the selected speed, the original collision-free gap constraint remains in force.
+Runs without a disturbance use the original update rule and random-number sequence.
+
+The initial shock-recovery experiment uses the following fixed intervention:
+
+- warm up for 200 steps;
+- begin the event at measurement step 100;
+- cap vehicle 0 at speed 0 for eight steps; and
+- observe the remainder of a 400-step measurement period.
+
+The pre-disturbance reference speed is the mean of measurement steps before the
+event. Recovery time is the number of steps after the event until the first
+20-step rolling window reaches at least 95% of that reference. We also record
+the minimum network mean speed and maximum stopped fraction after braking,
+overall speed variation, and flow (`density * mean speed`). If the threshold is
+not reached before the run ends, the run is reported as not recovered rather
+than assigning an artificial recovery time.
+
+This intervention provides a reproducible comparison of resilience under the
+model assumptions. It does not represent calibrated emergency braking, human
+reaction time, or a specific road incident.
+
+### Initial reactive-controller observations
+
+Across 10 seeds, every tested run recovered within the 400-step measurement
+period. Increasing AV share reduced the average maximum stopped fraction after
+braking at both densities: from 40.0% to 20.8% at density 0.20 and from 50.0%
+to 20.0% at density 0.30. Recovery time was not monotonic at density 0.20: it
+fell from 44.5 steps at 0% AV to 33.4 at 50% AV, then rose to 41.0 at 100% AV.
+At density 0.30 it generally declined, reaching 23.0 steps at 100% AV. These
+results show why both disruption severity and recovery time must be reported;
+one metric alone does not establish that a controller is more resilient. The
+planned anticipatory-controller comparison will test whether an alternative AV
+rule changes this pattern.
+
 ### Evening Shift Updates (Issue #4 Implementation)
 
 - **AV Rule Choice:** Implemented the proposed baseline where AVs use the same acceleration and gap rules but completely bypass random slowing (\(p_{av} = 0.0\)). This provides a clean empirical contrast to isolate human stochastic delays.

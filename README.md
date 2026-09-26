@@ -55,6 +55,38 @@ python -m experiments.final_experiment --seeds 1-30
 
 `results/final-runs.csv` contains one row per independent simulation. `results/final-summary.csv` reports the mean and sample standard deviation across seeds for each density and AV share. The across-seed variation is distinct from `speed_std`, which measures variation among vehicle-speed observations within one simulation.
 
+## Run the controlled braking experiment
+
+The shock-recovery experiment introduces the same eight-step braking event into
+each run, then measures the severity of the disruption and the time required for
+traffic to recover. It compares densities 0.20 and 0.30 at 0%, 25%, 50%, 75%
+and 100% AV share across seeds 1 through 10:
+
+```powershell
+python -m experiments.shock_recovery
+```
+
+The disturbance begins at measurement step 100, after a 200-step warm-up, and
+caps vehicle 0 at speed zero through step 107. Recovery is the first 20-step
+post-event window whose mean speed reaches at least 95% of the pre-event mean.
+The command writes:
+
+- `results/shock-recovery-timeseries.csv`: per-step metrics for representative
+  seed 1 at every density and AV share;
+- `results/shock-recovery-runs.csv`: one row of disruption and recovery metrics
+  per independent run; and
+- `results/shock-recovery-summary.csv`: means and sample standard deviations
+  across seeds for each condition.
+
+The base command also supports a single disturbed run:
+
+```powershell
+python -m traffic_sim --vehicles 60 --av-share 0.5 --warmup 200 --steps 400 --seed 7 --disturbance-start-step 100 --disturbance-duration 8 --disturbance-vehicle-id 0 --disturbance-speed-cap 0
+```
+
+This braking event is a controlled model intervention used to compare traffic
+resilience. It is not intended to reproduce a particular real-world incident.
+
 ## Two-person workflow
 
 We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, then suggests the next morning task based on pilot results. Work passes back for experiments, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
