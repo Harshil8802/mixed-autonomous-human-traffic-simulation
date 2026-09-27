@@ -122,3 +122,13 @@ rule changes this pattern.
 - **Sensitivity Insights:**
   - **100% AV Control Stability:** Verified that when the AV penetration index reaches 1.0, varying \(p_h\) causes 0.000 variance in macro metrics (Speed holds flat at `4.000 +/- 0.000`), confirming the deterministic boundary conditions of the control setup.
   - **Damping Envelopes:** A 50% AV share scales linearly, providing continuous flow damping across all tested noise ranges—slashing stopped vehicle observations by approximately 30% even when human volatility spikes to \(p_h = 0.4\).
+
+
+### Late Night Shift Updates (Issue #13 Policy Comparison)
+
+- **Anticipatory AV Logic:** Implemented an alternative control rule using a `safety_buffer = 2`. When the gap opens up, it scales with the leader's speed; when the gap drops below the buffer, it limits acceleration to match the leading vehicle's velocity exactly.
+- **Verification Matrix:** Evaluated both `reactive` and `anticipatory` modes across densities (0.20, 0.30) and all specified AV share bands over 10 independent seeds.
+
+#### Observed Policy Trade-offs
+- **Density 0.20 Behavior:** The anticipatory controller manages stop-and-go waves efficiently at medium shares. At 50% AV share, the anticipatory mode keeps the max stopped fraction lower than the reactive mode (`31.2%` vs `33.0%`). However, at 100% AV share, the defensive buffer causes a recovery drag, taking `35.4` steps to stabilize compared to reactive's lower max breakdown footprint of `20.8%`.
+- **Density 0.30 Congestion:** Under heavy crowding, both policies struggle similarly with peak shock dissipation up to 75% share. At 100% AV share, reactive control outperforms anticipatory, keeping the maximum stopped fraction down to `20.0%` (compared to anticipatory's `48.3%`) and recovering faster (`23.0` steps vs `24.7` steps). This highlights that rigid safety buffers can accidentally stall grid clearance in overcrowded conditions.

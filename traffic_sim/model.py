@@ -20,6 +20,7 @@ class SimulationConfig:
     human_slow_probability: float = 0.2
     av_share: float = 0.0
     seed: int = 1
+    av_policy: str = "reactive"  # Policy selector ("reactive" or "anticipatory")
 
     def __post_init__(self) -> None:
         if self.road_length < 2:
@@ -32,6 +33,8 @@ class SimulationConfig:
             raise ValueError("human_slow_probability must be between 0 and 1")
         if not 0 <= self.av_share <= 1:
             raise ValueError("av_share must be between 0 and 1")
+        if self.av_policy not in ("reactive", "anticipatory"):
+            raise ValueError("av_policy must be 'reactive' or 'anticipatory'")
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,6 @@ class BrakingDisturbance:
     @property
     def end_step(self) -> int:
         """Last measurement step on which the speed cap is active."""
-
         return self.start_step + self.duration - 1
 
     def is_active(self, measurement_step: int) -> bool:
@@ -116,8 +118,6 @@ class TrafficModel:
         if any(cap < 0 or cap > self.config.max_speed for cap in speed_caps.values()):
             raise ValueError("speed caps must be between 0 and max_speed")
 
-        # CRITICAL FIX: Do NOT sort by position here. 
-        # Using the natural array index guarantees cars maintain spatial order.
         updated = []
         num_cars = len(self.vehicles)
         
@@ -125,16 +125,25 @@ class TrafficModel:
             ahead = self.vehicles[(index + 1) % num_cars]
             gap = (ahead.position - vehicle.position - 1) % self.config.road_length
             
-            # Base velocity calculation
-            speed = min(vehicle.speed + 1, self.config.max_speed, gap)
-            
-            # Apply random slowing ONLY to human drivers
-            if (
-                vehicle.vehicle_type == "human"
-                and speed > 0 
-                and self.rng.random() < self.config.human_slow_probability
-            ):
-                speed -= 1
+            if vehicle.vehicle_type == "human":
+                # Standard reactive human logic with random slowing
+                speed = min(vehicle.speed + 1, self.config.max_speed, gap)
+                if (
+                    speed > 0 
+                    and self.rng.random() < self.config.human_slow_probability
+                ):
+                    speed -= 1
+            else:
+                # AV CONTROLLER ROUTING
+                if self.config.av_policy == "reactive":
+                    speed = min(vehicle.speed + 1, self.config.max_speed, gap)
+                else:
+                    # --- ANTICIPATORY AV POLICY ---
+                    safety_buffer = 2
+                    if gap <= safety_buffer:
+                        speed = min(vehicle.speed + 1, self.config.max_speed, gap, ahead.speed)
+                    else:
+                        speed = min(vehicle.speed + 1, self.config.max_speed, gap, ahead.speed + (gap - safety_buffer))
 
             if vehicle.vehicle_id in speed_caps:
                 speed = min(speed, speed_caps[vehicle.vehicle_id])
@@ -164,7 +173,6 @@ def run_simulation(
     disturbance: BrakingDisturbance | None = None,
 ) -> dict:
     """Return per-step metrics and a summary after the warm-up period."""
-
     if steps < 1 or warmup < 0:
         raise ValueError("steps must be positive and warmup must be non-negative")
     if disturbance is not None:
@@ -212,6 +220,7 @@ def run_simulation(
                 "speed_std": pstdev(speeds),
                 "requested_av_share": config.av_share,
                 "realised_av_share": realised,
+                "av_policy": config.av_policy,
                 "disturbance_active": disturbance_active,
                 "disturbed_vehicle_speed": disturbed_vehicle_speed,
             }
@@ -221,13 +230,11 @@ def run_simulation(
         "config": asdict(config),
         "warmup": warmup,
         "steps": steps,
-        "disturbance": asdict(disturbance) if disturbance is not None else None,
-        "requested_av_share": config.av_share,
         "realised_av_share": realised,
         "summary": {
-            "mean_speed": fmean(all_speeds),
-            "stopped_fraction": all_speeds.count(0) / len(all_speeds),
-            "speed_std": pstdev(all_speeds),
+            "mean_speed": fmean(all_speeds) if all_speeds else 0.0,
+            "stopped_fraction": all_speeds.count(0) / len(all_speeds) if all_speeds else 0.0,
+            "speed_std": pstdev(all_speeds) if all_speeds else 0.0,
         },
         "per_step": rows,
     }
