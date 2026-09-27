@@ -125,6 +125,27 @@ class RecoveryMetricTests(unittest.TestCase):
         self.assertEqual({row["requested_av_share"] for row in runs}, {0.0, 1.0})
         self.assertTrue(all(row["num_runs"] == 2 for row in summaries))
 
+class TestAnticipatoryShockRecovery(unittest.TestCase):
+    def test_anticipatory_policy_option_is_accepted(self) -> None:
+        """Verifies that the model correctly initializes with the anticipatory policy."""
+        config = SimulationConfig(road_length=200, num_vehicles=40, av_share=0.5, av_policy="anticipatory")
+        model = TrafficModel(config)
+        self.assertEqual(model.config.av_policy, "anticipatory")
+
+    def test_experiment_runner_handles_both_policies(self) -> None:
+        """Ensures the shock runner processes both policies across seeds cleanly."""
+        # Run a tiny slice (1 seed, 1 density, 1 mixed share) to verify data integrity
+        timeseries, runs = run_shock_experiment(
+            seeds=(1,),
+            vehicle_counts=(40,),
+            av_shares=(0.5,),
+            steps=10,
+            warmup=10
+        )
+        # Should record entries for both active policies
+        policies_logged = {row["av_policy"] for row in runs}
+        self.assertTrue("reactive" in policies_logged)
+        self.assertTrue("anticipatory" in policies_logged)
 
 if __name__ == "__main__":
     unittest.main()
