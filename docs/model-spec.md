@@ -132,3 +132,10 @@ rule changes this pattern.
 #### Observed Policy Trade-offs
 - **Density 0.20 Behavior:** The anticipatory controller manages stop-and-go waves efficiently at medium shares. At 50% AV share, the anticipatory mode keeps the max stopped fraction lower than the reactive mode (`31.2%` vs `33.0%`). However, at 100% AV share, the defensive buffer causes a recovery drag, taking `35.4` steps to stabilize compared to reactive's lower max breakdown footprint of `20.8%`.
 - **Density 0.30 Congestion:** Under heavy crowding, both policies struggle similarly with peak shock dissipation up to 75% share. At 100% AV share, reactive control outperforms anticipatory, keeping the maximum stopped fraction down to `20.0%` (compared to anticipatory's `48.3%`) and recovering faster (`23.0` steps vs `24.7` steps). This highlights that rigid safety buffers can accidentally stall grid clearance in overcrowded conditions.
+
+
+### Night Shift Updates (Issue #14 Two-Lane Implementation)
+
+- **Two-Lane Topology Upgrade:** Extended the `SimulationConfig` and `TrafficModel` core framework to map vehicle positions across a parallel two-lane ring track layout (\(\text{lanes} \in \{1, 2\}\)).
+- **Symmetric Passing Rules:** Integrated local lane-changing look-ahead and look-back lookups into the synchronous `step()` phase. Vehicles will dynamically toggle to the adjacent lane before moving forward if the target position is clear, the target path provides a wider forward clearance gap, and the trailing vehicle safety margins prevent collisions.
+- **Verification Gates:** Restructured system position checks (`_check_state`) to validate coordinates as independent `(lane, position)` unique tracking pairs, unblocking cross-lane vehicles while successfully preventing local vehicle overlap bugs.
