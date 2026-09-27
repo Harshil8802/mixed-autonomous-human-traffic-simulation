@@ -83,6 +83,18 @@ class TrafficModelTests(unittest.TestCase):
             car_1 = next(v for v in model.vehicles if v.vehicle_id == 1)
             self.assertTrue(car_0.position < car_1.position or car_0.position > 15)
 
+    def test_two_lane_vehicles_can_switch_lanes_safely(self) -> None:
+        """Confirms that a vehicle switches lanes when blocked by a slow car ahead."""
+        config = SimulationConfig(road_length=20, num_vehicles=2, lanes=2, av_share=0.0)
+        model = TrafficModel(config)
+        
+        from traffic_sim.model import Vehicle
+        # Place vehicle 0 directly behind vehicle 1 in the slow lane (lane 0)
+        model.vehicles = [Vehicle(0, 5, 4, "human", 0), Vehicle(1, 6, 0, "human", 0)]
+        
+        updated_vehicles = model.step()
+        # The trailing car must dynamically hop over to the fast lane (lane 1)
+        self.assertEqual(updated_vehicles[0].lane, 1)
 
 if __name__ == "__main__":
     unittest.main()
