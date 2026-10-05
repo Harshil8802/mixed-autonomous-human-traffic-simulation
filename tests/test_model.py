@@ -107,5 +107,139 @@ class TrafficModelTests(unittest.TestCase):
         # The trailing car must dynamically hop over to the fast lane (lane 1)
         self.assertEqual(updated_vehicles[0].lane, 1)
 
+    def test_occupied_target_cell_blocks_lane_change_at_wraparound(self):
+        config = SimulationConfig(
+            road_length=10,
+            num_vehicles=3,
+            max_speed=5,
+            human_slow_probability=0,
+            lanes=2,
+        )
+        model = TrafficModel(config)
+        model.vehicles = [
+            Vehicle(0, 9, 3, "human", 0),
+            Vehicle(1, 0, 0, "human", 0),
+            Vehicle(2, 9, 0, "human", 1),
+        ]
+
+        vehicles = model.step()
+        trailing = next(vehicle for vehicle in vehicles if vehicle.vehicle_id == 0)
+
+        self.assertEqual(trailing.lane, 0)
+        self.assertEqual(len({(vehicle.lane, vehicle.position) for vehicle in vehicles}), 3)
+
+    def test_fast_rear_vehicle_blocks_unsafe_lane_change(self):
+        config = SimulationConfig(
+            road_length=20,
+            num_vehicles=4,
+            max_speed=5,
+            human_slow_probability=0,
+            lanes=2,
+        )
+        model = TrafficModel(config)
+        model.vehicles = [
+            Vehicle(0, 5, 4, "human", 0),
+            Vehicle(1, 6, 0, "human", 0),
+            Vehicle(2, 3, 3, "human", 1),
+            Vehicle(3, 15, 0, "human", 1),
+        ]
+
+        vehicles = model.step()
+        blocked_vehicle = next(
+            vehicle for vehicle in vehicles if vehicle.vehicle_id == 0
+        )
+
+        self.assertEqual(blocked_vehicle.lane, 0)
+        self.assertEqual(
+            len({(vehicle.lane, vehicle.position) for vehicle in vehicles}),
+            config.num_vehicles,
+        )
+
+    def test_two_lane_run_is_reproducible(self):
+        config = SimulationConfig(
+            road_length=50,
+            num_vehicles=30,
+            human_slow_probability=0.3,
+            av_share=0.5,
+            av_policy="anticipatory",
+            lanes=2,
+            seed=19,
+        )
+
+        self.assertEqual(
+            run_simulation(config, warmup=20, steps=50),
+            run_simulation(config, warmup=20, steps=50),
+        )
+
+    def test_high_density_two_lane_runs_preserve_invariants_across_seeds(self):
+        for seed in range(1, 11):
+            config = SimulationConfig(
+                road_length=30,
+                num_vehicles=48,
+                human_slow_probability=0.4,
+                av_share=0.5,
+                av_policy="anticipatory",
+                lanes=2,
+                seed=seed,
+            )
+            model = TrafficModel(config)
+            expected_ids = {vehicle.vehicle_id for vehicle in model.vehicles}
+
+            for _ in range(100):
+                vehicles = model.step()
+                self.assertEqual(len(vehicles), config.num_vehicles)
+                self.assertEqual(
+                    {vehicle.vehicle_id for vehicle in vehicles}, expected_ids
+                )
+                self.assertEqual(
+                    len({(vehicle.lane, vehicle.position) for vehicle in vehicles}),
+                    config.num_vehicles,
+                )
+                self.assertTrue(
+                    all(0 <= vehicle.speed <= config.max_speed for vehicle in vehicles)
+                )
+
+    def test_occupancy_index_refactor_preserves_seeded_state_signature(self):
+        config = SimulationConfig(
+            road_length=20,
+            num_vehicles=12,
+            lanes=2,
+            av_share=0.5,
+            av_policy="anticipatory",
+            human_slow_probability=0.2,
+            seed=11,
+        )
+        model = TrafficModel(config)
+
+        for _ in range(25):
+            model.step()
+
+        self.assertEqual(
+            [
+                (
+                    vehicle.vehicle_id,
+                    vehicle.position,
+                    vehicle.speed,
+                    vehicle.vehicle_type,
+                    vehicle.lane,
+                )
+                for vehicle in model.vehicles
+            ],
+            [
+                (0, 19, 0, "human", 1),
+                (1, 1, 0, "av", 1),
+                (2, 7, 4, "human", 0),
+                (3, 12, 4, "av", 0),
+                (4, 15, 4, "human", 1),
+                (5, 16, 0, "human", 1),
+                (6, 18, 1, "av", 1),
+                (7, 2, 0, "human", 1),
+                (8, 2, 3, "av", 0),
+                (9, 18, 5, "human", 0),
+                (10, 6, 2, "av", 1),
+                (11, 10, 3, "av", 1),
+            ],
+        )
+
 if __name__ == "__main__":
     unittest.main()

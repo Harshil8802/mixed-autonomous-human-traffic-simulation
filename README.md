@@ -37,6 +37,12 @@ python -m traffic_sim --road-length 200 --vehicles 80 --lanes 2 --max-speed 5 --
 python -m unittest discover -s tests -v
 ```
 
+For a repeatable local performance check of the dense two-lane model, run:
+
+```powershell
+python -m experiments.benchmark_model
+```
+
 `--lanes` selects a one- or two-lane circular road, `--av-policy` selects the reactive or anticipatory AV controller, and `--av-share` accepts a value from `0` (all human) to `1` (all AV). Human drivers may slow randomly; AVs follow deterministic collision-free rules according to the selected controller. The command prints the configuration and summary metrics as JSON. With `--csv`, it also writes one row per post-warm-up step. `outputs/` is ignored by Git, so reported results should always include their parameters and seeds.
 
 ## Reproduce the Checkpoint 2 pilot

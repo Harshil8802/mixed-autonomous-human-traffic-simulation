@@ -94,6 +94,26 @@ recovery time. Figures are deterministic SVG files generated with the Python
 standard library, so every report graphic can be recreated without manual
 chart editing.
 
+## Two-lane update and safety rules
+
+Two-lane movement is resolved in two synchronous phases. During the lane-change
+phase, every vehicle reads the same pre-change state. A vehicle may move to the
+other lane only when its current cell is empty in that lane, the target lane
+has strictly more forward clearance, and no rear vehicle within `v_max` cells
+could reach the merge cell in the current step. Vehicles retain their road
+position during this phase. Because vehicles in one lane occupy distinct road
+positions, their target cells in the other lane are also distinct; vehicles at
+the same road position in opposite lanes cannot swap because each target cell
+is occupied in the shared snapshot.
+
+After all lane decisions are applied, every vehicle calculates its forward gap
+from the same post-change state and all longitudinal movements occur together.
+The circular-road modulo operation is used for forward and rear checks, so the
+same rules apply at position zero and the road boundary. Automated cases cover
+occupied target cells, unsafe rear approaches, wraparound, repeatability and
+high-density multi-seed runs. These rules are a simplified symmetric passing
+intervention rather than a jurisdiction-specific overtaking model.
+
 ## Controlled braking and recovery extension
 
 To study transient stop-and-go waves as well as steady-state averages, the model
