@@ -95,6 +95,20 @@ The command writes:
 - `results/shock-recovery-summary.csv`: means and sample standard deviations
   across seeds for each condition.
 
+Generate the report-ready quantitative and qualitative figures after producing
+the shock-recovery CSV files:
+
+```powershell
+python -m experiments.generate_figures
+```
+
+This writes three dependency-free SVG files under `results/figures/`: a summary
+comparison of braking severity and recovery time, representative recovery
+curves, and a space-time comparison showing individual vehicle trajectories.
+The trajectory recorder is opt-in, so normal experiment runs retain their
+existing compact outputs. SVG is used so labels and paths remain sharp when
+inserted into the report or demonstration slides.
+
 The base command also supports a single disturbed run:
 
 ```powershell
