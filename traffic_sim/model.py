@@ -212,6 +212,7 @@ def run_simulation(
     steps: int = 800,
     warmup: int = 200,
     disturbance: BrakingDisturbance | None = None,
+    record_trajectories: bool = False,
 ) -> dict:
     if steps < 1 or warmup < 0:
         raise ValueError("steps must be positive and warmup must be non-negative")
@@ -230,6 +231,7 @@ def run_simulation(
         model.step()
 
     rows = []
+    trajectories = []
     all_speeds = []
     for measurement_step in range(1, steps + 1):
         disturbance_active = (disturbance is not None and disturbance.is_active(measurement_step))
@@ -255,6 +257,19 @@ def run_simulation(
                 "disturbed_vehicle_speed": disturbed_vehicle_speed,
             }
         )
+        if record_trajectories:
+            trajectories.extend(
+                {
+                    "step": measurement_step,
+                    "vehicle_id": vehicle.vehicle_id,
+                    "position": vehicle.position,
+                    "lane": vehicle.lane,
+                    "speed": vehicle.speed,
+                    "vehicle_type": vehicle.vehicle_type,
+                    "disturbance_active": disturbance_active,
+                }
+                for vehicle in vehicles
+            )
 
     return {
         "config": asdict(config),
@@ -267,4 +282,5 @@ def run_simulation(
             "speed_std": pstdev(all_speeds) if all_speeds else 0.0,
         },
         "per_step": rows,
+        "trajectories": trajectories,
     }

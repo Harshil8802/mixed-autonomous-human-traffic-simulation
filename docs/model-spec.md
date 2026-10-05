@@ -82,6 +82,18 @@ Report means and variation across runs. Record each run's parameters and seed so
 
 Any conclusion must be framed as conditional on these rules and parameters. We should discuss how the chosen AV rule itself influences the result, and test a plausible alternative or sensitivity if time allows.
 
+## Reproducible qualitative evidence
+
+The final evidence workflow records full vehicle trajectories only when
+`record_trajectories=True`; routine parameter sweeps retain compact aggregate
+outputs. Each trajectory row stores the measurement step, vehicle identity,
+lane, position, speed and type. `python -m experiments.generate_figures` uses
+this opt-in record to create space-time diagrams and representative recovery
+curves, and uses the repeated-seed summary CSV to plot disruption severity and
+recovery time. Figures are deterministic SVG files generated with the Python
+standard library, so every report graphic can be recreated without manual
+chart editing.
+
 ## Controlled braking and recovery extension
 
 To study transient stop-and-go waves as well as steady-state averages, the model
