@@ -143,7 +143,37 @@ def create_summary_figure(rows: Iterable[dict[str, str]], output: Path, *, densi
             svg.add('<polyline fill="none" stroke="{}" stroke-width="2.5" points="{}"/>'.format(
                 color, " ".join(f"{x:.1f},{y:.1f}" for x, y in mapped)
             ))
-            for px, py in mapped:
+            source_points = sorted(
+                (
+                    float(row["requested_av_share"]),
+                    row,
+                )
+                for row in selected
+                if (int(row["lanes"]), row["av_policy"]) == key
+                and _number(row, metric) is not None
+            )
+            interval_keys = {
+                "maximum_stopped_fraction_after_braking_mean": (
+                    "maximum_stopped_fraction_after_braking_ci95_low",
+                    "maximum_stopped_fraction_after_braking_ci95_high",
+                ),
+                "recovery_time_steps_mean": (
+                    "recovery_time_steps_ci95_low",
+                    "recovery_time_steps_ci95_high",
+                ),
+            }.get(metric)
+            for (px, py), (_, source_row) in zip(mapped, source_points):
+                if interval_keys:
+                    low = _number(source_row, interval_keys[0])
+                    high = _number(source_row, interval_keys[1])
+                    if low is not None and high is not None:
+                        low_y = y0 + height - height * low / ymax
+                        high_y = y0 + height - height * high / ymax
+                        svg.add(
+                            f'<line x1="{px:.1f}" y1="{high_y:.1f}" '
+                            f'x2="{px:.1f}" y2="{low_y:.1f}" '
+                            f'stroke="{color}" stroke-width="1.2"/>'
+                        )
                 svg.add(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" fill="{color}"/>')
     svg.save(output)
 

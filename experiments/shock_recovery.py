@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 from collections import defaultdict
 from pathlib import Path
-from statistics import fmean, stdev
+from statistics import fmean, median, quantiles, stdev
 from typing import Iterable
 
 from experiments.final_experiment import parse_seeds
@@ -308,6 +309,12 @@ def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
             for row in group
             if row["recovery_time_steps"] is not None
         ]
+        maximum_stopped_values = [
+            row["maximum_stopped_fraction_after_braking"] for row in group
+        ]
+        recovery_ci = _mean_ci95(recovered_times)
+        stopped_ci = _mean_ci95(maximum_stopped_values)
+        recovery_quartiles = _quartiles(recovered_times)
         summaries.append(
             {
                 "road_length": group[0]["road_length"],
@@ -320,6 +327,7 @@ def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
                 "av_policy": av_policy,
                 "num_runs": len(group),
                 "recovered_runs": len(recovered_times),
+                "recovery_rate": len(recovered_times) / len(group),
                 "mean_speed_mean": fmean(row["mean_speed"] for row in group),
                 "mean_speed_seed_sd": _sample_sd([row["mean_speed"] for row in group]),
                 "stopped_fraction_mean": fmean(row["stopped_fraction"] for row in group),
@@ -342,8 +350,17 @@ def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
                 "pre_disturbance_mean_speed_mean": fmean(row["pre_disturbance_mean_speed"] for row in group),
                 "minimum_mean_speed_after_braking_mean": fmean(row["minimum_mean_speed_after_braking"] for row in group),
                 "maximum_stopped_fraction_after_braking_mean": fmean(row["maximum_stopped_fraction_after_braking"] for row in group),
+                "maximum_stopped_fraction_after_braking_ci95_low": stopped_ci[0],
+                "maximum_stopped_fraction_after_braking_ci95_high": stopped_ci[1],
                 "recovery_time_steps_mean": fmean(recovered_times) if recovered_times else None,
                 "recovery_time_steps_seed_sd": _sample_sd(recovered_times) if recovered_times else None,
+                "recovery_time_steps_ci95_low": recovery_ci[0],
+                "recovery_time_steps_ci95_high": recovery_ci[1],
+                "recovery_time_steps_median": (
+                    median(recovered_times) if recovered_times else None
+                ),
+                "recovery_time_steps_q1": recovery_quartiles[0],
+                "recovery_time_steps_q3": recovery_quartiles[1],
             }
         )
     return summaries
@@ -351,6 +368,59 @@ def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
 
 def _sample_sd(values: list[float]) -> float:
     return stdev(values) if len(values) > 1 else 0.0
+
+
+def _mean_ci95(values: list[float]) -> tuple[float | None, float | None]:
+    """Return a two-sided 95% t interval for independent run values."""
+    if not values:
+        return None, None
+    mean = fmean(values)
+    if len(values) == 1:
+        return mean, mean
+    t_critical = {
+        1: 12.706,
+        2: 4.303,
+        3: 3.182,
+        4: 2.776,
+        5: 2.571,
+        6: 2.447,
+        7: 2.365,
+        8: 2.306,
+        9: 2.262,
+        10: 2.228,
+        11: 2.201,
+        12: 2.179,
+        13: 2.160,
+        14: 2.145,
+        15: 2.131,
+        16: 2.120,
+        17: 2.110,
+        18: 2.101,
+        19: 2.093,
+        20: 2.086,
+        25: 2.060,
+        30: 2.042,
+    }
+    degrees_freedom = len(values) - 1
+    critical = next(
+        (
+            value
+            for df, value in sorted(t_critical.items())
+            if degrees_freedom <= df
+        ),
+        1.96,
+    )
+    margin = critical * stdev(values) / math.sqrt(len(values))
+    return mean - margin, mean + margin
+
+
+def _quartiles(values: list[float]) -> tuple[float | None, float | None]:
+    if not values:
+        return None, None
+    if len(values) == 1:
+        return values[0], values[0]
+    q1, _, q3 = quantiles(values, n=4, method="inclusive")
+    return q1, q3
 
 
 def write_csv(rows: list[dict], output: Path) -> None:
