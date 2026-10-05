@@ -1,22 +1,32 @@
-# Mixed Human and Autonomous Traffic Simulation
+# Mixed Human and Autonomous Traffic Resilience Simulation
 
-CITS4403 group research project investigating how the share of autonomous vehicles affects stop-and-go traffic on a single-lane circular road. The project is completed by two students. The model, experiments, report and demonstration should answer the same research question and be reproducible from the submitted code.
+This CITS4403 group research project investigates how mixed human and autonomous traffic responds to a controlled braking disturbance. A discrete circular-road model supplies a transparent baseline; the research contribution is the systematic comparison of autonomous-vehicle penetration, controller strategy and lane-changing access using reproducible shock-recovery experiments. The model is an exploratory complex-systems model, not a calibrated predictor of real-road AV performance.
 
 ## Research question
 
-How does autonomous vehicle proportion affect traffic stability at different traffic densities in a simplified mixed-traffic model?
+**How do autonomous-vehicle penetration and controller strategy affect the severity and recovery of braking-induced congestion, and how does safe two-lane passing alter this response?**
 
-The model is designed to investigate this question under explicit simplified rules. It does not claim to predict real-road AV performance.
+## Originality and contribution
 
-## Initial scope
+Traffic jams on a simple ring road are a taught example in CITS4403, so reproducing that baseline is not presented as the project's original contribution. The baseline is used as a controlled reference against which the team investigates five extensions:
 
-- One lane on a circular road; no intersections, entry, exits or lane changes.
-- Human and AV vehicles follow explicit, documented update rules.
-- Start with a human-only baseline, then add AV behaviour.
-- Compare several AV shares at several densities using repeated runs and recorded random seeds.
-- Report average speed, stopped-vehicle fraction and speed variation; inspect space-time plots for traffic waves.
+- mixed human and autonomous traffic at several AV penetration levels;
+- reactive and anticipatory AV controller assumptions;
+- a repeatable braking intervention and explicit recovery measurements;
+- safe symmetric passing on a parallel two-lane ring; and
+- sensitivity to the probability of unpredictable human slowing.
 
-See [draft model specification](docs/model-spec.md) for assumptions, proposed measurements and decisions still to make.
+The added value is a controlled analysis of traffic resilience: whether a disturbance grows or dissipates, how long recovery takes, and whether the conclusion changes with controller design or access to an adjacent lane. Comparisons use repeated random seeds and report variation across runs.
+
+## Implemented scope
+
+- One- and two-lane circular roads with no intersections, entry or exit.
+- Human, reactive-AV and anticipatory-AV update rules.
+- Reproducible initialisation with recorded seeds and synchronous movement.
+- Steady-state, sensitivity and controlled shock-recovery experiments.
+- Quantitative measures including mean speed, stopped fraction, speed variation, disruption severity and recovery time.
+
+See the [model specification](docs/model-spec.md) for assumptions, update rules, experimental controls and limitations.
 
 ## Run the model
 
@@ -39,9 +49,9 @@ python -m experiments.checkpoint2_pilot
 
 This regenerates `results/checkpoint2-pilot.csv` and prints a compact table. The pilot is an initial demonstration, not the final experiment: the final analysis will use additional AV shares and repeated seeds. See [Checkpoint 2 notes](docs/checkpoint-2.md) for the model explanation, preliminary observations, limitations and next experiment.
 
-## Run the repeated-seed experiment
+## Run the repeated-seed steady-state baseline
 
-The final experiment expands the comparison to 0%, 10%, 25%, 50%, 75% and 100% AV traffic at each pilot density. By default it runs seeds 1 through 20 and writes both individual-run results and summaries across seeds:
+The steady-state baseline expands the comparison to 0%, 10%, 25%, 50%, 75% and 100% AV traffic at each pilot density. By default it runs seeds 1 through 20 and writes both individual-run results and summaries across seeds:
 
 ```powershell
 python -m experiments.final_experiment
@@ -59,8 +69,9 @@ python -m experiments.final_experiment --seeds 1-30
 
 The shock-recovery experiment introduces the same eight-step braking event into
 each run, then measures the severity of the disruption and the time required for
-traffic to recover. It compares densities 0.20 and 0.30 at 0%, 25%, 50%, 75%
-and 100% AV share across seeds 1 through 10:
+traffic to recover. It compares reactive and anticipatory control at densities
+0.20 and 0.30, at 0%, 25%, 50%, 75% and 100% AV share, across seeds 1 through
+10:
 
 ```powershell
 python -m experiments.shock_recovery
