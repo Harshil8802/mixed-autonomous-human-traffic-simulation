@@ -139,6 +139,21 @@ run's matched no-shock control. Shock summaries also report recovery rate,
 median and interquartile range so runs that do not recover are visible rather
 than silently discarded.
 
+## Run the robustness experiment
+
+Test whether the conclusions change with braking duration, recovery threshold
+or warm-up length using a bounded set of representative conditions:
+
+```powershell
+python -m experiments.robustness
+```
+
+The command writes `results/robustness-runs.csv` and
+`results/robustness-summary.csv`. Recovery thresholds are evaluated from the
+same simulated trajectory, avoiding unnecessary duplicate runs. The default
+matrix uses five seeds and is intended to test the robustness of the main
+conclusion rather than replace the final experiment.
+
 ## Two-person workflow
 
 We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, then suggests the next morning task based on pilot results. Work passes back for experiments, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
