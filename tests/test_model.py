@@ -199,5 +199,47 @@ class TrafficModelTests(unittest.TestCase):
                     all(0 <= vehicle.speed <= config.max_speed for vehicle in vehicles)
                 )
 
+    def test_occupancy_index_refactor_preserves_seeded_state_signature(self):
+        config = SimulationConfig(
+            road_length=20,
+            num_vehicles=12,
+            lanes=2,
+            av_share=0.5,
+            av_policy="anticipatory",
+            human_slow_probability=0.2,
+            seed=11,
+        )
+        model = TrafficModel(config)
+
+        for _ in range(25):
+            model.step()
+
+        self.assertEqual(
+            [
+                (
+                    vehicle.vehicle_id,
+                    vehicle.position,
+                    vehicle.speed,
+                    vehicle.vehicle_type,
+                    vehicle.lane,
+                )
+                for vehicle in model.vehicles
+            ],
+            [
+                (0, 19, 0, "human", 1),
+                (1, 1, 0, "av", 1),
+                (2, 7, 4, "human", 0),
+                (3, 12, 4, "av", 0),
+                (4, 15, 4, "human", 1),
+                (5, 16, 0, "human", 1),
+                (6, 18, 1, "av", 1),
+                (7, 2, 0, "human", 1),
+                (8, 2, 3, "av", 0),
+                (9, 18, 5, "human", 0),
+                (10, 6, 2, "av", 1),
+                (11, 10, 3, "av", 1),
+            ],
+        )
+
 if __name__ == "__main__":
     unittest.main()
