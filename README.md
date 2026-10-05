@@ -33,11 +33,11 @@ See the [model specification](docs/model-spec.md) for assumptions, update rules,
 Python 3 with the standard library is sufficient. From the repository root:
 
 ```powershell
-python -m traffic_sim --road-length 200 --vehicles 40 --max-speed 5 --human-slow-prob 0.2 --av-share 0.5 --warmup 200 --steps 800 --seed 7 --csv outputs/mixed-seed7.csv
+python -m traffic_sim --road-length 200 --vehicles 80 --lanes 2 --max-speed 5 --human-slow-prob 0.2 --av-share 0.5 --av-policy anticipatory --warmup 200 --steps 800 --seed 7 --csv outputs/mixed-seed7.csv
 python -m unittest discover -s tests -v
 ```
 
-`--av-share` accepts a value from `0` (all human) to `1` (all AV). Human drivers may slow randomly; AVs follow the same acceleration and collision-free gap rules without random slowing. The command prints the configuration and summary metrics as JSON. With `--csv`, it also writes one row per post-warm-up step. `outputs/` is ignored by Git, so reported results should always include their parameters and seeds.
+`--lanes` selects a one- or two-lane circular road, `--av-policy` selects the reactive or anticipatory AV controller, and `--av-share` accepts a value from `0` (all human) to `1` (all AV). Human drivers may slow randomly; AVs follow deterministic collision-free rules according to the selected controller. The command prints the configuration and summary metrics as JSON. With `--csv`, it also writes one row per post-warm-up step. `outputs/` is ignored by Git, so reported results should always include their parameters and seeds.
 
 ## Reproduce the Checkpoint 2 pilot
 
@@ -69,13 +69,19 @@ python -m experiments.final_experiment --seeds 1-30
 
 The shock-recovery experiment introduces the same eight-step braking event into
 each run, then measures the severity of the disruption and the time required for
-traffic to recover. It compares reactive and anticipatory control at densities
-0.20 and 0.30, at 0%, 25%, 50%, 75% and 100% AV share, across seeds 1 through
-10:
+traffic to recover. It compares one- and two-lane roads, reactive and
+anticipatory control, densities 0.20 and 0.30, and 0%, 25%, 50%, 75% and 100%
+AV share across seeds 1 through 10:
 
 ```powershell
 python -m experiments.shock_recovery
 ```
+
+Two-lane conditions use twice as many vehicles as their one-lane counterparts,
+so occupancy density remains `vehicles / (road length * lanes)`. This isolates
+the effect of access to a passing lane from a change in road occupancy. Use
+`--lanes 1`, `--lanes 2` or `--lanes all` and `--policy reactive`,
+`--policy anticipatory` or `--policy all` to run a subset of the matrix.
 
 The disturbance begins at measurement step 100, after a 200-step warm-up, and
 caps vehicle 0 at speed zero through step 107. Recovery is the first 20-step
@@ -92,7 +98,7 @@ The command writes:
 The base command also supports a single disturbed run:
 
 ```powershell
-python -m traffic_sim --vehicles 60 --av-share 0.5 --warmup 200 --steps 400 --seed 7 --disturbance-start-step 100 --disturbance-duration 8 --disturbance-vehicle-id 0 --disturbance-speed-cap 0
+python -m traffic_sim --vehicles 120 --lanes 2 --av-share 0.5 --av-policy anticipatory --warmup 200 --steps 400 --seed 7 --disturbance-start-step 100 --disturbance-duration 8 --disturbance-vehicle-id 0 --disturbance-speed-cap 0
 ```
 
 This braking event is a controlled model intervention used to compare traffic
