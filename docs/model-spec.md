@@ -1,39 +1,55 @@
-# Draft model specification
+# Model specification and research contribution
 
-**Status:** Core baseline and mixed-traffic model rules implemented and verified for Checkpoint 2. Parameters below are pilot choices, not calibrated real-world values.
+**Status:** The human/AV baseline, reactive and anticipatory controllers, controlled braking intervention and two-lane passing rules are implemented. The final experiment and visual analysis are being consolidated. Parameters are modelling choices rather than calibrated real-world values.
 
 ## Research question
 
-How does autonomous vehicle proportion affect stop-and-go traffic stability at different traffic densities on a single-lane circular road?
+**How do autonomous-vehicle penetration and controller strategy affect the severity and recovery of braking-induced congestion, and how does safe two-lane passing alter this response?**
 
-We will test whether adding AVs changes mean speed and traffic stability, whether the effect depends on density, and whether any apparent improvement is gradual or concentrated in a narrower range of AV shares. A threshold is a possible result, not an assumption.
+The investigation tests whether increasing AV penetration changes the size and duration of a controlled traffic disruption, whether reactive and anticipatory AV rules produce different outcomes, and whether access to a second lane changes those conclusions. Human slowdown probability is varied separately as a robustness check. Any threshold or improvement is treated as an empirical result of the stated model, not an assumption.
+
+## Originality and relationship to the taught model
+
+The single-lane circular cellular-automaton model is a teaching baseline and is not claimed as an original model. It provides a simple, auditable control case. The team's contribution is the experimental framework built around that baseline:
+
+1. mixed populations of stochastic human drivers and deterministic AVs;
+2. comparison of reactive and anticipatory AV controller assumptions;
+3. a controlled braking intervention with disruption and sustained-recovery measures;
+4. a two-lane extension with explicit forward and rear safety checks for passing; and
+5. repeated-seed and human-behaviour sensitivity analyses.
+
+Together these extensions investigate traffic **resilience** rather than merely reproducing spontaneous congestion. Conclusions are conditional on the simplified rules and are not predictions about deployed autonomous vehicles.
 
 ## Road and vehicle state
 
-- The road is a ring of `L` discrete cells. Each vehicle occupies one cell.
-- At time `t`, vehicle `i` has an integer position `x_i`, integer speed `v_i` in `0..v_max`, and type `human` or `av`.
-- Density is `N/L`, where `N` is the fixed number of vehicles. There are no entries or exits.
-- The gap `g_i` is the number of empty cells before the next vehicle ahead, wrapping around the ring.
+- The road contains `K` parallel circular lanes of `L` discrete cells, where `K` is 1 or 2. Each vehicle occupies one `(lane, position)` cell.
+- At time `t`, vehicle `i` has lane `y_i`, integer position `x_i`, integer speed `v_i` in `0..v_max`, and type `human` or `av`.
+- Occupancy density is `N/(L*K)`, where `N` is the fixed number of vehicles. There are no entries or exits.
+- The forward gap `g_i` is the number of empty cells before the next vehicle in the same lane, wrapping around the ring.
 - Every vehicle decides from the same time-`t` snapshot; all positions change together. This synchronous update prevents vehicle-order artifacts.
 
-## Proposed one-step update
+## One-step update
 
-1. Accelerate: `v_i = min(v_i + 1, v_max)`.
-2. Keep a collision-free gap: `v_i = min(v_i, g_i)`.
-3. For a human driver, reduce speed by one with probability `p_h`, stopping at zero.
-4. For the implemented AV rule, vehicles use the same acceleration and gap rules but completely bypass the random slowing rule ($p_{av} = 0.0$). This provides a controlled behavioural contrast rather than a claim about actual automated driving dynamics. The model does not currently represent sensing uncertainty or reaction delays.
-5. Move: `x_i = (x_i + v_i) mod L`.
+1. **Lane-change decision (`K = 2` only):** a vehicle may move to the adjacent lane when its target cell is empty, the target lane has a larger forward gap, and the rear safety check shows that the trailing target-lane vehicle cannot reach the merge cell. Lane choices use the same pre-change snapshot.
+2. **Acceleration and collision-free braking:** start from `min(v_i + 1, v_max, g_i)`.
+3. **Human rule:** reduce the resulting speed by one with probability `p_h`, stopping at zero.
+4. **Reactive AV rule:** use the acceleration and gap result without random slowing.
+5. **Anticipatory AV rule:** also consider the leading vehicle's speed and a two-cell safety buffer, limiting acceleration more strongly when the gap is small.
+6. **Optional intervention:** while a braking disturbance is active, cap the selected vehicle's speed after its ordinary controller update.
+7. **Movement:** update every vehicle simultaneously using `x_i = (x_i + v_i) mod L`.
 
-The first implementation should support human-only traffic. AV behaviour is a separate contribution after the baseline is checked. Explicit reaction delay, AV communication and lane changes are outside the initial scope.
+Human drivers and both AV policies use the same collision-free gap constraint. The model excludes intersections, entry and exit, heterogeneous vehicle lengths, sensing error, explicit reaction delay and AV communication.
 
-## Pilot experiment design
+## Experimental strategy
 
-- Initial road length: `L = 200` cells; initial maximum speed: `v_max = 5` cells per step.
-- Pilot densities: `N = 20, 40, 60` vehicles (density `0.10, 0.20, 0.30`). These may change if pilots do not produce informative conditions.
-- AV shares: `0%, 10%, 25%, 50%, 75%, 100%`. For a fixed `N`, the AV count is rounded to the nearest integer (`round(N * av_share)`), shuffled randomly across initial vehicle positions, and both the requested and actual realized shares are locked into the output logs to ensure strict execution tracking.
-- Hold road length, maximum speed, human slowing probability, simulation length and initialization method constant within a comparison.
-- Run multiple independent seeds per condition. Use a small pilot first, then choose enough repeats to show variation in final results.
-- Proposed analysis window: discard an initial settling period, then measure over the remaining steps. Specify the final step counts before running reported experiments.
+- Use `L = 200` cells per lane and `v_max = 5` cells per step.
+- Compare occupancy densities while accounting for lane count with `N/(L*K)`. Equal-density one- and two-lane comparisons therefore use different vehicle counts.
+- Compare AV shares of `0%, 25%, 50%, 75%, 100%`; the steady-state baseline additionally samples `10%`.
+- For a fixed `N`, calculate `round(N * av_share)`, shuffle vehicle types reproducibly and record both requested and realised shares.
+- Compare reactive and anticipatory policies. The 0% AV condition is shared because AV policy cannot affect an all-human population.
+- Hold maximum speed, human slowdown probability, warm-up, measurement duration, intervention and initialisation method constant within each comparison.
+- Repeat every reported condition across recorded seeds and report variation across runs.
+- Use the human slowdown sweep as a robustness analysis rather than as a separate research question.
 
 ## Measurements
 
@@ -41,7 +57,9 @@ The first implementation should support human-only traffic. AV behaviour is a se
 - **Stopped fraction:** proportion of vehicle observations with `v_i = 0` during measurement.
 - **Speed variation:** standard deviation of individual speeds over the measurement window. Also plot the mean speed over time to reveal fluctuations.
 - **Qualitative evidence:** a space-time diagram of vehicle positions, with selected vehicle speeds or stopped positions marked, to inspect backward-moving congestion waves.
-- **Optional throughput:** count vehicles crossing a fixed road cell per time step, handling wraparound correctly.
+- **Traffic flow:** occupancy density multiplied by mean speed.
+- **Disruption severity:** minimum network mean speed and maximum stopped fraction after braking begins.
+- **Recovery time:** first sustained post-disturbance window that returns to the specified fraction of pre-disturbance mean speed.
 
 Report means and variation across runs. Record each run's parameters and seed so figures can be regenerated. If a sharp change appears, sample additional AV shares around it before making a threshold claim.
 
@@ -54,12 +72,13 @@ Report means and variation across runs. Record each run's parameters and seed so
 - Inspect simple hand-calculated cases, including a gap across the ring boundary.
 - Compare qualitative plots across free-flow and congested pilot conditions.
 
-## Decisions for both members
+## Final design decisions
 
-1. Confirm or revise the update rule and `p_h` pilot value. Random slowing and explicit reaction delay are different assumptions; the first version uses random slowing only.
-2. Agree how vehicles are placed and typed initially, and whether identical starting positions should be reused across AV-share comparisons.
-3. Finalize run length, settling period, repeat count and exact plot conventions after pilot results.
-4. Ask the facilitator whether this focused single-lane model provides enough scope when supported by systematic experiments and a sensitivity study.
+1. Random slowing represents unresolved human variability; it is not an explicit reaction-delay model.
+2. Initial cells are sampled without replacement, vehicle types are shuffled reproducibly, and the seed is recorded with every run.
+3. The controlled braking event supplies the common intervention used to compare resilience.
+4. The two AV policies are alternative modelling assumptions whose outcomes must be compared rather than treating either as realistic by default.
+5. The second lane is a structural intervention. Equal-density comparisons must use `N/(L*K)` so that added capacity is not mistaken for a controller effect.
 
 Any conclusion must be framed as conditional on these rules and parameters. We should discuss how the chosen AV rule itself influences the result, and test a plausible alternative or sensitivity if time allows.
 
@@ -101,7 +120,7 @@ fell from 44.5 steps at 0% AV to 33.4 at 50% AV, then rose to 41.0 at 100% AV.
 At density 0.30 it generally declined, reaching 23.0 steps at 100% AV. These
 results show why both disruption severity and recovery time must be reported;
 one metric alone does not establish that a controller is more resilient. The
-planned anticipatory-controller comparison will test whether an alternative AV
+implemented anticipatory-controller comparison tests whether an alternative AV
 rule changes this pattern.
 
 ### Evening Shift Updates (Issue #4 Implementation)
@@ -134,7 +153,7 @@ rule changes this pattern.
 - **Density 0.30 Congestion:** Under heavy crowding, both policies struggle similarly with peak shock dissipation up to 75% share. At 100% AV share, reactive control outperforms anticipatory, keeping the maximum stopped fraction down to `20.0%` (compared to anticipatory's `48.3%`) and recovering faster (`23.0` steps vs `24.7` steps). This highlights that rigid safety buffers can accidentally stall grid clearance in overcrowded conditions.
 
 
-### Night Shift Updates (Issue #14 Two-Lane Implementation)
+### Night Shift Updates (Issue #16 Two-Lane Implementation)
 
 - **Two-Lane Topology Upgrade:** Extended the `SimulationConfig` and `TrafficModel` core framework to map vehicle positions across a parallel two-lane ring track layout (\(\text{lanes} \in \{1, 2\}\)).
 - **Symmetric Passing Rules:** Integrated local lane-changing look-ahead and look-back lookups into the synchronous `step()` phase. Vehicles will dynamically toggle to the adjacent lane before moving forward if the target position is clear, the target path provides a wider forward clearance gap, and the trailing vehicle safety margins prevent collisions.
