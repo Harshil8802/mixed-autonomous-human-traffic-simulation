@@ -20,6 +20,19 @@ def main() -> None:
     parser.add_argument("--csv", type=Path, help="Write per-step metrics to this CSV file")
     parser.add_argument("--av-share", type=float, default=0.0, help="Fraction of autonomous vehicles (0 to 1)")
     parser.add_argument(
+        "--av-policy",
+        choices=("reactive", "anticipatory"),
+        default="reactive",
+        help="Autonomous-vehicle controller (default: reactive)",
+    )
+    parser.add_argument(
+        "--lanes",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="Number of parallel circular lanes (default: 1)",
+    )
+    parser.add_argument(
         "--disturbance-start-step",
         type=int,
         help="Measurement step at which a controlled braking event begins",
@@ -36,6 +49,8 @@ def main() -> None:
         human_slow_probability=args.human_slow_prob,
         av_share=args.av_share,
         seed=args.seed,
+        av_policy=args.av_policy,
+        lanes=args.lanes,
     )
     
     disturbance = (

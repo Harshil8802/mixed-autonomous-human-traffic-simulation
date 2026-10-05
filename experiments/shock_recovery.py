@@ -17,7 +17,10 @@ DEFAULT_TIMESERIES_OUTPUT = Path("results/shock-recovery-timeseries.csv")
 DEFAULT_RUNS_OUTPUT = Path("results/shock-recovery-runs.csv")
 DEFAULT_SUMMARY_OUTPUT = Path("results/shock-recovery-summary.csv")
 ROAD_LENGTH = 200
+# Vehicle counts describe the equivalent single-lane occupancy. Two-lane runs
+# multiply these counts by two to preserve N / (road_length * lanes).
 VEHICLE_COUNTS = (40, 60)
+LANE_COUNTS = (1, 2)
 AV_SHARES = (0.0, 0.25, 0.50, 0.75, 1.0)
 POLICIES = ("reactive", "anticipatory")
 DEFAULT_SEEDS = tuple(range(1, 11))
@@ -77,6 +80,7 @@ def run_shock_experiment(
     *,
     road_length: int = ROAD_LENGTH,
     vehicle_counts: Iterable[int] = VEHICLE_COUNTS,
+    lane_counts: Iterable[int] = (1,),
     av_shares: Iterable[float] = AV_SHARES,
     policies: Iterable[str] = POLICIES,
     human_slow_probability: float = 0.2,
@@ -86,95 +90,135 @@ def run_shock_experiment(
     recovery_window: int = 20,
     timeseries_seeds: Iterable[int] | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    """Run shock-recovery conditions and retain selected per-step time series."""
+    """Run shock-recovery conditions at equal occupancy across lane counts.
+
+    ``vehicle_counts`` contains the number of vehicles for the equivalent
+    single-lane condition. For ``K`` lanes, the simulation uses ``K`` times
+    that count so density remains ``N / (road_length * K)``.
+    """
     seed_values = tuple(seeds)
     if not seed_values:
         raise ValueError("at least one seed is required")
+    lane_values = tuple(dict.fromkeys(lane_counts))
+    if not lane_values:
+        raise ValueError("at least one lane count is required")
+    if any(lanes not in (1, 2) for lanes in lane_values):
+        raise ValueError("lane counts must be 1 or 2")
+    single_lane_vehicle_counts = tuple(vehicle_counts)
+    if not single_lane_vehicle_counts:
+        raise ValueError("at least one vehicle count is required")
+    share_values = tuple(av_shares)
+    if not share_values:
+        raise ValueError("at least one AV share is required")
+    policy_values = tuple(dict.fromkeys(policies))
+    if not policy_values:
+        raise ValueError("at least one AV policy is required")
+    if any(policy not in POLICIES for policy in policy_values):
+        raise ValueError("AV policies must be reactive or anticipatory")
     selected_timeseries_seeds = set(
         timeseries_seeds if timeseries_seeds is not None else (seed_values[0],)
     )
 
     timeseries_rows: list[dict] = []
     run_rows: list[dict] = []
-    for num_vehicles in vehicle_counts:
-        density = num_vehicles / road_length
-        for requested_av_share in av_shares:
-            for policy in policies:
-                for seed in seed_values:
-                    # Treat zero AV share as identical control configuration across policies
-                    if requested_av_share == 0.0 and policy != "reactive":
-                        continue
+    for lanes in lane_values:
+        for single_lane_vehicle_count in single_lane_vehicle_counts:
+            num_vehicles = single_lane_vehicle_count * lanes
+            road_cells = road_length * lanes
+            density = num_vehicles / road_cells
+            for requested_av_share in share_values:
+                active_policies = (
+                    ("reactive",)
+                    if requested_av_share == 0.0
+                    else policy_values
+                )
+                for policy in active_policies:
+                    for seed in seed_values:
+                        config = SimulationConfig(
+                            road_length=road_length,
+                            num_vehicles=num_vehicles,
+                            max_speed=5,
+                            human_slow_probability=human_slow_probability,
+                            av_share=requested_av_share,
+                            seed=seed,
+                            av_policy=policy,
+                            lanes=lanes,
+                        )
+                        result = run_simulation(
+                            config,
+                            warmup=warmup,
+                            steps=steps,
+                            disturbance=disturbance,
+                        )
+                        recovery = calculate_recovery_metrics(
+                            result["per_step"],
+                            disturbance,
+                            recovery_window=recovery_window,
+                        )
+                        run_rows.append(
+                            {
+                                "road_length": road_length,
+                                "lanes": lanes,
+                                "road_cells": road_cells,
+                                "num_vehicles": num_vehicles,
+                                "density": density,
+                                "requested_av_share": requested_av_share,
+                                "realised_av_share": result["realised_av_share"],
+                                "av_policy": policy,
+                                "seed": seed,
+                                "warmup": warmup,
+                                "steps": steps,
+                                "disturbance_vehicle_id": disturbance.vehicle_id,
+                                "disturbance_start_step": disturbance.start_step,
+                                "disturbance_duration": disturbance.duration,
+                                "disturbance_speed_cap": disturbance.speed_cap,
+                                "mean_speed": result["summary"]["mean_speed"],
+                                "stopped_fraction": result["summary"]["stopped_fraction"],
+                                "speed_std": result["summary"]["speed_std"],
+                                "traffic_flow": density
+                                * result["summary"]["mean_speed"],
+                                **recovery,
+                            }
+                        )
 
-                    config = SimulationConfig(
-                        road_length=road_length,
-                        num_vehicles=num_vehicles,
-                        max_speed=5,
-                        human_slow_probability=human_slow_probability,
-                        av_share=requested_av_share,
-                        seed=seed,
-                        av_policy=policy,
-                    )
-                    result = run_simulation(
-                        config,
-                        warmup=warmup,
-                        steps=steps,
-                        disturbance=disturbance,
-                    )
-                    recovery = calculate_recovery_metrics(
-                        result["per_step"],
-                        disturbance,
-                        recovery_window=recovery_window,
-                    )
-                    run_rows.append(
-                        {
-                            "road_length": road_length,
-                            "num_vehicles": num_vehicles,
-                            "density": density,
-                            "requested_av_share": requested_av_share,
-                            "realised_av_share": result["realised_av_share"],
-                            "av_policy": policy,
-                            "seed": seed,
-                            "warmup": warmup,
-                            "steps": steps,
-                            "disturbance_vehicle_id": disturbance.vehicle_id,
-                            "disturbance_start_step": disturbance.start_step,
-                            "disturbance_duration": disturbance.duration,
-                            "disturbance_speed_cap": disturbance.speed_cap,
-                            "mean_speed": result["summary"]["mean_speed"],
-                            "stopped_fraction": result["summary"]["stopped_fraction"],
-                            "speed_std": result["summary"]["speed_std"],
-                            "traffic_flow": density * result["summary"]["mean_speed"],
-                            **recovery,
-                        }
-                    )
-
-                    if seed in selected_timeseries_seeds:
-                        for row in result["per_step"]:
-                            timeseries_rows.append(
-                                {
-                                    "road_length": road_length,
-                                    "num_vehicles": num_vehicles,
-                                    "density": density,
-                                    "requested_av_share": requested_av_share,
-                                    "realised_av_share": result["realised_av_share"],
-                                    "av_policy": policy,
-                                    "seed": seed,
-                                    **row,
-                                    "traffic_flow": density * row["mean_speed"],
-                                }
-                            )
+                        if seed in selected_timeseries_seeds:
+                            for row in result["per_step"]:
+                                timeseries_rows.append(
+                                    {
+                                        "road_length": road_length,
+                                        "lanes": lanes,
+                                        "road_cells": road_cells,
+                                        "num_vehicles": num_vehicles,
+                                        "density": density,
+                                        "requested_av_share": requested_av_share,
+                                        "realised_av_share": result[
+                                            "realised_av_share"
+                                        ],
+                                        "av_policy": policy,
+                                        "seed": seed,
+                                        **row,
+                                        "traffic_flow": density
+                                        * row["mean_speed"],
+                                    }
+                                )
     return timeseries_rows, run_rows
 
 
 def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
     """Summarise independent shock-recovery runs across seeds and policies."""
-    groups: dict[tuple[float, float, str], list[dict]] = defaultdict(list)
+    groups: dict[tuple[int, float, float, str], list[dict]] = defaultdict(list)
     for row in rows:
-        groups[(row["density"], row["requested_av_share"], row["av_policy"])].append(row)
+        key = (
+            row["lanes"],
+            row["density"],
+            row["requested_av_share"],
+            row["av_policy"],
+        )
+        groups[key].append(row)
 
     summaries = []
-    for density, requested_av_share, av_policy in sorted(groups):
-        group = groups[(density, requested_av_share, av_policy)]
+    for lanes, density, requested_av_share, av_policy in sorted(groups):
+        group = groups[(lanes, density, requested_av_share, av_policy)]
         recovered_times = [
             row["recovery_time_steps"]
             for row in group
@@ -182,6 +226,9 @@ def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
         ]
         summaries.append(
             {
+                "road_length": group[0]["road_length"],
+                "lanes": lanes,
+                "road_cells": group[0]["road_cells"],
                 "density": density,
                 "num_vehicles": group[0]["num_vehicles"],
                 "requested_av_share": requested_av_share,
@@ -220,13 +267,21 @@ def write_csv(rows: list[dict], output: Path) -> None:
 
 
 def print_summary(rows: list[dict]) -> None:
-    print("\n| Density | AV share | Policy | Runs | Recov | Max Stop Break | Recov Time +/- SD |")
-    print("|---:|---:|:---|---:|---:|---:|---:|")
+    print(
+        "\n| Lanes | Density | AV share | Policy | Runs | Recov | "
+        "Max Stop Break | Recov Time +/- SD |"
+    )
+    print("|---:|---:|---:|:---|---:|---:|---:|---:|")
     for r in rows:
-        # (This completes the print_summary function loop from above)
-        rec_time = f"{r['recovery_time_steps_mean']:.1f} +/- {r['recovery_time_steps_seed_sd']:.1f}" if r['recovery_time_steps_mean'] is not None else "N/A"
+        rec_time = (
+            f"{r['recovery_time_steps_mean']:.1f} +/- "
+            f"{r['recovery_time_steps_seed_sd']:.1f}"
+            if r["recovery_time_steps_mean"] is not None
+            else "N/A"
+        )
         print(
-            f"| {r['density']:.2f} | {r['realised_av_share']:.0%} | "
+            f"| {r['lanes']} | {r['density']:.2f} | "
+            f"{r['realised_av_share']:.0%} | "
             f"{r['av_policy']:<12} | {r['num_runs']} | {r['recovered_runs']} | "
             f"{r['maximum_stopped_fraction_after_braking_mean']:.1%} | "
             f"{rec_time} |"
@@ -247,13 +302,24 @@ def main() -> None:
         default="all",
         help="AV policy to evaluate (default: all)",
     )
+    parser.add_argument(
+        "--lanes",
+        choices=("1", "2", "all"),
+        default="all",
+        help="Lane counts to evaluate (default: all)",
+    )
     parser.add_argument("--timeseries-output", type=Path, default=DEFAULT_TIMESERIES_OUTPUT)
     parser.add_argument("--runs-output", type=Path, default=DEFAULT_RUNS_OUTPUT)
     parser.add_argument("--summary-output", type=Path, default=DEFAULT_SUMMARY_OUTPUT)
     args = parser.parse_args()
 
     selected_policies = POLICIES if args.policy == "all" else (args.policy,)
-    timeseries_rows, run_rows = run_shock_experiment(args.seeds, policies=selected_policies)
+    selected_lanes = LANE_COUNTS if args.lanes == "all" else (int(args.lanes),)
+    timeseries_rows, run_rows = run_shock_experiment(
+        args.seeds,
+        policies=selected_policies,
+        lane_counts=selected_lanes,
+    )
     summary_rows = aggregate_runs(run_rows)
     
     write_csv(timeseries_rows, args.timeseries_output)

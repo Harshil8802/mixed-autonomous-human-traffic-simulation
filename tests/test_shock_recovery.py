@@ -1,5 +1,4 @@
 import unittest
-from pathlib import Path
 from experiments.shock_recovery import (
     aggregate_runs,
     calculate_recovery_metrics,
@@ -124,6 +123,55 @@ class RecoveryMetricTests(unittest.TestCase):
         self.assertEqual(len(summaries), 3)
         self.assertEqual({row["seed"] for row in runs}, {1, 2})
         self.assertEqual({row["requested_av_share"] for row in runs}, {0.0, 1.0})
+        self.assertTrue(all(row["lanes"] == 1 for row in runs))
+        self.assertTrue(all(row["num_runs"] == 2 for row in summaries))
+
+    def test_lane_comparison_preserves_occupancy_density(self):
+        disturbance = BrakingDisturbance(start_step=2, duration=2)
+
+        timeseries, runs = run_shock_experiment(
+            seeds=(1,),
+            road_length=20,
+            vehicle_counts=(4,),
+            lane_counts=(1, 2),
+            av_shares=(0.0,),
+            warmup=2,
+            steps=8,
+            disturbance=disturbance,
+            recovery_window=2,
+        )
+        summaries = aggregate_runs(runs)
+
+        self.assertEqual({row["lanes"] for row in runs}, {1, 2})
+        self.assertEqual(
+            {(row["lanes"], row["num_vehicles"]) for row in runs},
+            {(1, 4), (2, 8)},
+        )
+        self.assertEqual({row["density"] for row in runs}, {0.2})
+        self.assertEqual({row["road_cells"] for row in runs}, {20, 40})
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual({row["lanes"] for row in timeseries}, {1, 2})
+
+    def test_policy_subset_keeps_all_human_control(self):
+        disturbance = BrakingDisturbance(start_step=2, duration=2)
+
+        _, runs = run_shock_experiment(
+            seeds=(1,),
+            road_length=20,
+            vehicle_counts=(4,),
+            lane_counts=(1,),
+            av_shares=(0.0, 0.5),
+            policies=("anticipatory",),
+            warmup=2,
+            steps=8,
+            disturbance=disturbance,
+            recovery_window=2,
+        )
+
+        self.assertEqual(
+            {(row["requested_av_share"], row["av_policy"]) for row in runs},
+            {(0.0, "reactive"), (0.5, "anticipatory")},
+        )
 
 
 class TestAnticipatoryShockRecovery(unittest.TestCase):
