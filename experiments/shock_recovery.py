@@ -150,13 +150,34 @@ def run_shock_experiment(
                             steps=steps,
                             disturbance=disturbance,
                         )
+                        control_result = run_simulation(
+                            config,
+                            warmup=warmup,
+                            steps=steps,
+                        )
                         recovery = calculate_recovery_metrics(
                             result["per_step"],
                             disturbance,
                             recovery_window=recovery_window,
                         )
+                        control_window = calculate_comparison_window_metrics(
+                            control_result["per_step"], disturbance
+                        )
+                        disturbed_vehicle = next(
+                            vehicle
+                            for vehicle in result["measurement_start_state"]
+                            if vehicle["vehicle_id"] == disturbance.vehicle_id
+                        )
+                        pair_id = make_pair_id(
+                            lanes=lanes,
+                            density=density,
+                            requested_av_share=requested_av_share,
+                            av_policy=policy,
+                            seed=seed,
+                        )
                         run_rows.append(
                             {
+                                "pair_id": pair_id,
                                 "road_length": road_length,
                                 "lanes": lanes,
                                 "road_cells": road_cells,
@@ -172,11 +193,42 @@ def run_shock_experiment(
                                 "disturbance_start_step": disturbance.start_step,
                                 "disturbance_duration": disturbance.duration,
                                 "disturbance_speed_cap": disturbance.speed_cap,
+                                "disturbed_vehicle_type": disturbed_vehicle[
+                                    "vehicle_type"
+                                ],
+                                "disturbed_vehicle_initial_lane": disturbed_vehicle[
+                                    "lane"
+                                ],
                                 "mean_speed": result["summary"]["mean_speed"],
                                 "stopped_fraction": result["summary"]["stopped_fraction"],
                                 "speed_std": result["summary"]["speed_std"],
                                 "traffic_flow": density
                                 * result["summary"]["mean_speed"],
+                                "control_mean_speed": control_result["summary"][
+                                    "mean_speed"
+                                ],
+                                "control_stopped_fraction": control_result["summary"][
+                                    "stopped_fraction"
+                                ],
+                                "control_speed_std": control_result["summary"][
+                                    "speed_std"
+                                ],
+                                "mean_speed_delta_from_control": result["summary"][
+                                    "mean_speed"
+                                ]
+                                - control_result["summary"]["mean_speed"],
+                                "stopped_fraction_delta_from_control": result[
+                                    "summary"
+                                ]["stopped_fraction"]
+                                - control_result["summary"]["stopped_fraction"],
+                                "minimum_mean_speed_delta_from_control": recovery[
+                                    "minimum_mean_speed_after_braking"
+                                ]
+                                - control_window["minimum_mean_speed"],
+                                "maximum_stopped_fraction_delta_from_control": recovery[
+                                    "maximum_stopped_fraction_after_braking"
+                                ]
+                                - control_window["maximum_stopped_fraction"],
                                 **recovery,
                             }
                         )
@@ -202,6 +254,38 @@ def run_shock_experiment(
                                     }
                                 )
     return timeseries_rows, run_rows
+
+
+def calculate_comparison_window_metrics(
+    per_step: list[dict], disturbance: BrakingDisturbance
+) -> dict[str, float]:
+    """Measure a control run over the same window used for shock severity."""
+    comparison_rows = [
+        row for row in per_step if row["step"] >= disturbance.start_step
+    ]
+    if not comparison_rows:
+        raise ValueError("comparison window must begin within the measurements")
+    return {
+        "minimum_mean_speed": min(row["mean_speed"] for row in comparison_rows),
+        "maximum_stopped_fraction": max(
+            row["stopped_fraction"] for row in comparison_rows
+        ),
+    }
+
+
+def make_pair_id(
+    *,
+    lanes: int,
+    density: float,
+    requested_av_share: float,
+    av_policy: str,
+    seed: int,
+) -> str:
+    """Return a stable identifier for a disturbed/control run pair."""
+    return (
+        f"lanes-{lanes}_density-{density:.3f}_av-{requested_av_share:.3f}_"
+        f"policy-{av_policy}_seed-{seed}"
+    )
 
 
 def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
@@ -242,6 +326,19 @@ def aggregate_runs(rows: Iterable[dict]) -> list[dict]:
                 "stopped_fraction_seed_sd": _sample_sd([row["stopped_fraction"] for row in group]),
                 "within_run_speed_std_mean": fmean(row["speed_std"] for row in group),
                 "traffic_flow_mean": fmean(row["traffic_flow"] for row in group),
+                "mean_speed_delta_from_control_mean": fmean(
+                    row["mean_speed_delta_from_control"] for row in group
+                ),
+                "stopped_fraction_delta_from_control_mean": fmean(
+                    row["stopped_fraction_delta_from_control"] for row in group
+                ),
+                "minimum_mean_speed_delta_from_control_mean": fmean(
+                    row["minimum_mean_speed_delta_from_control"] for row in group
+                ),
+                "maximum_stopped_fraction_delta_from_control_mean": fmean(
+                    row["maximum_stopped_fraction_delta_from_control"]
+                    for row in group
+                ),
                 "pre_disturbance_mean_speed_mean": fmean(row["pre_disturbance_mean_speed"] for row in group),
                 "minimum_mean_speed_after_braking_mean": fmean(row["minimum_mean_speed_after_braking"] for row in group),
                 "maximum_stopped_fraction_after_braking_mean": fmean(row["maximum_stopped_fraction_after_braking"] for row in group),

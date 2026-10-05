@@ -230,6 +230,7 @@ def run_simulation(
     for _ in range(warmup):
         model.step()
 
+    measurement_start_state = [asdict(vehicle) for vehicle in model.vehicles]
     rows = []
     trajectories = []
     all_speeds = []
@@ -240,9 +241,14 @@ def run_simulation(
         vehicles = model.step(speed_caps=speed_caps)
         speeds = [vehicle.speed for vehicle in vehicles]
         all_speeds.extend(speeds)
-        disturbed_vehicle_speed = (
-            next(vehicle.speed for vehicle in vehicles if vehicle.vehicle_id == disturbance.vehicle_id)
-            if disturbance is not None else None
+        disturbed_vehicle = (
+            next(
+                vehicle
+                for vehicle in vehicles
+                if vehicle.vehicle_id == disturbance.vehicle_id
+            )
+            if disturbance is not None
+            else None
         )
         rows.append(
             {
@@ -254,7 +260,20 @@ def run_simulation(
                 "realised_av_share": realised,
                 "av_policy": config.av_policy,
                 "disturbance_active": disturbance_active,
-                "disturbed_vehicle_speed": disturbed_vehicle_speed,
+                "disturbed_vehicle_speed": (
+                    disturbed_vehicle.speed if disturbed_vehicle is not None else None
+                ),
+                "disturbed_vehicle_position": (
+                    disturbed_vehicle.position if disturbed_vehicle is not None else None
+                ),
+                "disturbed_vehicle_lane": (
+                    disturbed_vehicle.lane if disturbed_vehicle is not None else None
+                ),
+                "disturbed_vehicle_type": (
+                    disturbed_vehicle.vehicle_type
+                    if disturbed_vehicle is not None
+                    else None
+                ),
             }
         )
         if record_trajectories:
@@ -276,6 +295,7 @@ def run_simulation(
         "warmup": warmup,
         "steps": steps,
         "realised_av_share": realised,
+        "measurement_start_state": measurement_start_state,
         "summary": {
             "mean_speed": fmean(all_speeds) if all_speeds else 0.0,
             "stopped_fraction": all_speeds.count(0) / len(all_speeds) if all_speeds else 0.0,

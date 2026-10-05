@@ -91,7 +91,8 @@ The command writes:
 - `results/shock-recovery-timeseries.csv`: per-step metrics for representative
   seed 1 at every density and AV share;
 - `results/shock-recovery-runs.csv`: one row of disruption and recovery metrics
-  per independent run; and
+  per independent run, including its matched no-shock control and control-relative
+  effects; and
 - `results/shock-recovery-summary.csv`: means and sample standard deviations
   across seeds for each condition.
 
@@ -117,6 +118,11 @@ python -m traffic_sim --vehicles 120 --lanes 2 --av-share 0.5 --av-policy antici
 
 This braking event is a controlled model intervention used to compare traffic
 resilience. It is not intended to reproduce a particular real-world incident.
+Each disturbed run is paired with an identical no-shock run using the same
+configuration, initial state and random seed. The run output records a stable
+pair identifier, the disturbed vehicle type and starting lane, and differences
+from the matched control. This separates normal stochastic variation from the
+effect attributed to the braking intervention.
 
 ## Two-person workflow
 
