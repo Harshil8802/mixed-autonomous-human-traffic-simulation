@@ -71,6 +71,17 @@ class TrafficModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SimulationConfig(av_share=1.1)
 
+    def test_invalid_speed_caps_are_rejected(self):
+        config = SimulationConfig(road_length=20, num_vehicles=2)
+        model = TrafficModel(config)
+
+        with self.assertRaisesRegex(ValueError, "unknown vehicle"):
+            model.step(speed_caps={99: 0})
+        with self.assertRaisesRegex(ValueError, "between 0 and max_speed"):
+            model.step(speed_caps={0: -1})
+        with self.assertRaisesRegex(ValueError, "between 0 and max_speed"):
+            model.step(speed_caps={0: config.max_speed + 1})
+
     def test_vehicles_cannot_overtake_or_swap_order(self):
         """Regression test for tracking order bug."""
         config = SimulationConfig(road_length=20, num_vehicles=2, max_speed=5, human_slow_probability=0)

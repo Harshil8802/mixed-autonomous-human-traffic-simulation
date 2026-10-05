@@ -112,6 +112,11 @@ class TrafficModel:
 
     def step(self, speed_caps: Mapping[int, int] | None = None) -> tuple[Vehicle, ...]:
         speed_caps = speed_caps or {}
+        valid_ids = {vehicle.vehicle_id for vehicle in self.vehicles}
+        if not set(speed_caps).issubset(valid_ids):
+            raise ValueError("speed cap refers to an unknown vehicle")
+        if any(cap < 0 or cap > self.config.max_speed for cap in speed_caps.values()):
+            raise ValueError("speed caps must be between 0 and max_speed")
         L = self.config.road_length
         
         def get_vehicle_at(l: int, p: int) -> Vehicle | None:
