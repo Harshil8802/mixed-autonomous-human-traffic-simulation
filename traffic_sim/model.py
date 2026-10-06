@@ -118,12 +118,16 @@ class TrafficModel:
         if any(cap < 0 or cap > self.config.max_speed for cap in speed_caps.values()):
             raise ValueError("speed caps must be between 0 and max_speed")
         L = self.config.road_length
-        
-        def get_vehicle_at(l: int, p: int) -> Vehicle | None:
-            for v in self.vehicles:
-                if v.lane == l and v.position == p:
-                    return v
-            return None
+
+        # All lane-change decisions read the same pre-change occupancy map.
+        # Dictionary lookup keeps cell checks constant-time as traffic density
+        # and the number of experiment repetitions grow.
+        occupied = {
+            (vehicle.lane, vehicle.position): vehicle for vehicle in self.vehicles
+        }
+
+        def get_vehicle_at(lane: int, position: int) -> Vehicle | None:
+            return occupied.get((lane, position))
 
         # --- STEP A: LANE CHANGES (Symmetric passing options) ---
         post_lane_change = []
@@ -164,17 +168,31 @@ class TrafficModel:
                 else:
                     post_lane_change.append(v)
             self.vehicles = post_lane_change
-        
+
+        lane_vehicles = {
+            lane: sorted(
+                (vehicle for vehicle in self.vehicles if vehicle.lane == lane),
+                key=lambda vehicle: vehicle.position,
+            )
+            for lane in range(self.config.lanes)
+        }
+        lane_indexes = {
+            lane: {
+                vehicle.vehicle_id: index
+                for index, vehicle in enumerate(vehicles)
+            }
+            for lane, vehicles in lane_vehicles.items()
+        }
+
         # --- STEP B: FORWARD UPDATE MOVEMENTS ---
         updated = []
         for vehicle in self.vehicles:
-            same_lane = sorted([v for v in self.vehicles if v.lane == vehicle.lane], key=lambda x: x.position)
-            
+            same_lane = lane_vehicles[vehicle.lane]
             if len(same_lane) == 1:
                 gap = L - 1
                 ahead_speed = self.config.max_speed
             else:
-                l_idx = same_lane.index(vehicle)
+                l_idx = lane_indexes[vehicle.lane][vehicle.vehicle_id]
                 ahead = same_lane[(l_idx + 1) % len(same_lane)]
                 gap = (ahead.position - vehicle.position - 1) % L
                 ahead_speed = ahead.speed
