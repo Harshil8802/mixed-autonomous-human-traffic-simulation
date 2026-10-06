@@ -124,6 +124,21 @@ pair identifier, the disturbed vehicle type and starting lane, and differences
 from the matched control. This separates normal stochastic variation from the
 effect attributed to the braking intervention.
 
+## Run the statistical comparison
+
+After generating the shock-recovery runs, calculate treatment effects and 95%
+confidence intervals with:
+
+```powershell
+python -m experiments.statistical_analysis
+```
+
+`results/statistical-effects.csv` reports within-seed effects relative to the
+0% AV condition, reactive control, the equivalent one-lane condition and each
+run's matched no-shock control. Shock summaries also report recovery rate,
+median and interquartile range so runs that do not recover are visible rather
+than silently discarded.
+
 ## Two-person workflow
 
 We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, then suggests the next morning task based on pilot results. Work passes back for experiments, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
