@@ -1,7 +1,9 @@
 import unittest
 from experiments.shock_recovery import (
     aggregate_runs,
+    calculate_comparison_window_metrics,
     calculate_recovery_metrics,
+    make_pair_id,
     run_shock_experiment,
 )
 from traffic_sim import BrakingDisturbance, SimulationConfig, TrafficModel, run_simulation
@@ -172,6 +174,68 @@ class RecoveryMetricTests(unittest.TestCase):
             {(row["requested_av_share"], row["av_policy"]) for row in runs},
             {(0.0, "reactive"), (0.5, "anticipatory")},
         )
+
+    def test_shock_runs_include_reproducible_paired_control_metrics(self):
+        disturbance = BrakingDisturbance(start_step=2, duration=2)
+
+        _, first_runs = run_shock_experiment(
+            seeds=(7,),
+            road_length=20,
+            vehicle_counts=(4,),
+            lane_counts=(1,),
+            av_shares=(0.5,),
+            policies=("reactive",),
+            warmup=2,
+            steps=8,
+            disturbance=disturbance,
+            recovery_window=2,
+        )
+        _, repeated_runs = run_shock_experiment(
+            seeds=(7,),
+            road_length=20,
+            vehicle_counts=(4,),
+            lane_counts=(1,),
+            av_shares=(0.5,),
+            policies=("reactive",),
+            warmup=2,
+            steps=8,
+            disturbance=disturbance,
+            recovery_window=2,
+        )
+
+        self.assertEqual(first_runs, repeated_runs)
+        row = first_runs[0]
+        self.assertEqual(
+            row["pair_id"],
+            make_pair_id(
+                lanes=1,
+                density=0.2,
+                requested_av_share=0.5,
+                av_policy="reactive",
+                seed=7,
+            ),
+        )
+        self.assertIn(row["disturbed_vehicle_type"], {"human", "av"})
+        self.assertEqual(row["disturbed_vehicle_initial_lane"], 0)
+        self.assertAlmostEqual(
+            row["mean_speed_delta_from_control"],
+            row["mean_speed"] - row["control_mean_speed"],
+        )
+
+    def test_control_window_uses_same_post_event_interval(self):
+        rows = [
+            {"step": 1, "mean_speed": 4.0, "stopped_fraction": 0.0},
+            {"step": 2, "mean_speed": 3.0, "stopped_fraction": 0.1},
+            {"step": 3, "mean_speed": 2.0, "stopped_fraction": 0.4},
+            {"step": 4, "mean_speed": 3.5, "stopped_fraction": 0.2},
+        ]
+
+        metrics = calculate_comparison_window_metrics(
+            rows, BrakingDisturbance(start_step=2, duration=1)
+        )
+
+        self.assertEqual(metrics["minimum_mean_speed"], 2.0)
+        self.assertEqual(metrics["maximum_stopped_fraction"], 0.4)
 
 
 class TestAnticipatoryShockRecovery(unittest.TestCase):
