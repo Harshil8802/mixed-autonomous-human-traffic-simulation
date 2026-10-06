@@ -30,11 +30,27 @@ See the [model specification](docs/model-spec.md) for assumptions, update rules,
 
 ## Run the model
 
-Python 3 with the standard library is sufficient. From the repository root:
+Python 3.10 or later is required. Create an isolated environment and install the
+project from the repository root:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
+
+The simulation and SVG generator use the Python standard library. After the
+editable installation, run a model and the test suite with:
 
 ```powershell
 python -m traffic_sim --road-length 200 --vehicles 80 --lanes 2 --max-speed 5 --human-slow-prob 0.2 --av-share 0.5 --av-policy anticipatory --warmup 200 --steps 800 --seed 7 --csv outputs/mixed-seed7.csv
 python -m unittest discover -s tests -v
+```
+
+For a repeatable local performance check of the dense two-lane model, run:
+
+```powershell
+python -m experiments.benchmark_model
 ```
 
 `--lanes` selects a one- or two-lane circular road, `--av-policy` selects the reactive or anticipatory AV controller, and `--av-share` accepts a value from `0` (all human) to `1` (all AV). Human drivers may slow randomly; AVs follow deterministic collision-free rules according to the selected controller. The command prints the configuration and summary metrics as JSON. With `--csv`, it also writes one row per post-warm-up step. `outputs/` is ignored by Git, so reported results should always include their parameters and seeds.
@@ -139,10 +155,45 @@ run's matched no-shock control. Shock summaries also report recovery rate,
 median and interquartile range so runs that do not recover are visible rather
 than silently discarded.
 
+## Run the robustness experiment
+
+Test whether the conclusions change with braking duration, recovery threshold
+or warm-up length using a bounded set of representative conditions:
+
+```powershell
+python -m experiments.robustness
+```
+
+The command writes `results/robustness-runs.csv` and
+`results/robustness-summary.csv`. Recovery thresholds are evaluated from the
+same simulated trajectory, avoiding unnecessary duplicate runs. The default
+matrix uses five seeds and is intended to test the robustness of the main
+conclusion rather than replace the final experiment.
+
 ## Two-person workflow
 
 We use small GitHub issues and pull requests so each member owns a substantive part of the model and reviews the other's work. The morning member starts the human-only baseline and verification. The evening member reviews the baseline, proposes and implements AV behaviour, then suggests the next morning task based on pilot results. Work passes back for experiments, analysis and interpretation. Both members contribute to modelling decisions, the report and the demonstration.
 
 At each handoff, leave a GitHub issue or PR update with what changed, the commands run, any open question, and the next task. Record modelling decisions in docs/model-spec.md so they do not depend on chat history.
 
-The official submission deadline is Friday 9 October 2026 at 11:59 pm. Checkpoint 2 is the next immediate discussion with the facilitator; confirm its exact scheduled time from the unit information.
+The official submission deadline is Friday 9 October 2026 at 11:59 pm.
+
+## Regenerate all final outputs
+
+After installing the project, regenerate the steady-state, sensitivity,
+shock-recovery, treatment-effect and robustness results plus every SVG figure:
+
+```powershell
+python -m experiments.run_all
+```
+
+The workflow writes `results/run-metadata.json` with the Python version, seed
+sets, final experiment matrix, intervention parameters, output paths and row
+counts. For a shorter installation check, use:
+
+```powershell
+python -m experiments.run_all --quick
+```
+
+GitHub Actions performs the editable installation and complete automated test
+suite for every pull request.
