@@ -5,6 +5,7 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 from statistics import fmean, stdev
+from typing import Iterable
 from traffic_sim import SimulationConfig, run_simulation
 
 DEFAULT_OUTPUT = Path("results/slowdown-sensitivity.csv")
@@ -14,22 +15,32 @@ SLOWDOWN_PROBS = (0.0, 0.1, 0.2, 0.3, 0.4)
 AV_SHARES = (0.0, 0.50, 1.0)
 SEEDS = tuple(range(1, 11))
 
-def run_sensitivity_experiment(output_path: Path) -> list[dict]:
+def run_sensitivity_experiment(
+    output_path: Path,
+    *,
+    seeds: Iterable[int] = SEEDS,
+    slowdown_probs: Iterable[float] = SLOWDOWN_PROBS,
+    av_shares: Iterable[float] = AV_SHARES,
+    road_length: int = ROAD_LENGTH,
+    num_vehicles: int = NUM_VEHICLES,
+    warmup: int = 200,
+    steps: int = 800,
+) -> list[dict]:
     """Sweeps through 15 conditions across 10 seeds and calculates statistics."""
     raw_data = []
     
-    for p_h in SLOWDOWN_PROBS:
-        for av_share in AV_SHARES:
-            for seed in SEEDS:
+    for p_h in slowdown_probs:
+        for av_share in av_shares:
+            for seed in seeds:
                 config = SimulationConfig(
-                    road_length=ROAD_LENGTH,
-                    num_vehicles=NUM_VEHICLES,
+                    road_length=road_length,
+                    num_vehicles=num_vehicles,
                     max_speed=5,
                     human_slow_probability=p_h,
                     av_share=av_share,
                     seed=seed,
                 )
-                result = run_simulation(config, warmup=200, steps=800)
+                result = run_simulation(config, warmup=warmup, steps=steps)
                 
                 raw_data.append({
                     "human_slow_probability": p_h,
