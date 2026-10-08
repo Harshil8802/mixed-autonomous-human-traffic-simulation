@@ -1,3 +1,7 @@
-# The simulation, experiments, tests and SVG figure generator use only the
-# Python 3 standard library. Notebook dependencies will be added with the
-# analysis notebook in a later task.
+# Editable project installation and final analysis notebook dependencies.
+# The simulation, experiments, tests and SVG generator use the standard library.
+-e .
+matplotlib>=3.8,<4
+ipykernel>=6,<8
+nbclient>=0.10,<1
+jupyterlab>=4,<5

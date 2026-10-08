@@ -36,10 +36,11 @@ project from the repository root:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+python -m pip install -r requirements.txt
 ```
 
-The simulation and SVG generator use the Python standard library. After the
+The simulation and SVG generator use the Python standard library. The
+requirements file also installs the notebook and plotting tools. After the
 editable installation, run a model and the test suite with:
 
 ```powershell
@@ -197,3 +198,20 @@ python -m experiments.run_all --quick
 
 GitHub Actions performs the editable installation and complete automated test
 suite for every pull request.
+
+## Explore the analysis notebook
+
+Open `notebooks/project_analysis.ipynb` in JupyterLab or VS Code after installing
+the requirements above. From the repository root, JupyterLab can be started with:
+
+```powershell
+jupyter lab notebooks/project_analysis.ipynb
+```
+
+Run all cells in order using the project environment's Python kernel. The
+notebook reads the committed **full** results, validates the run manifest and
+row counts, then runs one representative shocked/control pair for its trajectory
+plot. It explains the model rules and equations, compares paired treatment
+effects with 95% confidence intervals, and tests sensitivity and robustness.
+If you regenerate results, run `python -m experiments.run_all` before reopening
+the notebook; the `--quick` outputs are intentionally rejected by its checks.
